@@ -1,0 +1,58 @@
+NightPigeon Source License
+Copyright (c) 2025 NightPigeon Contributors
+
+---
+
+## Plain-English Summary
+
+### ✅ You CAN
+
+- Self-host NightPigeon on your own Discord server(s) that you personally own or directly manage
+- Modify the source code for your own private use
+- Fork the repository for private development and learning
+
+### ❌ You CANNOT
+
+- Run a public instance of NightPigeon that other people or server owners can invite to their servers
+- Offer NightPigeon (or any fork of it) as a hosted or shared bot service to others — even for free
+- Create your own public-facing NightPigeon bot under any name or branding
+- Charge for access to a running instance of NightPigeon
+- Remove or obscure the original copyright notice in any distribution
+
+### ⚠️ You MUST
+
+- Keep this license file in any fork or copy of the code
+- Keep the copyright notice intact in any source files you distribute
+
+---
+
+## Full Terms
+
+Permission is granted, free of charge, to any individual to obtain a copy
+of this software and associated documentation files (the "Software") for the
+sole purpose of self-hosting on Discord servers that you personally own or
+directly administer, subject to the following restrictions:
+
+1. **No public instances.** You may not operate any instance of the Software
+   that is accessible to Discord servers, users, or server owners outside of
+   your own. This includes running a public bot that others can invite, sharing
+   a bot token for others to use, or operating the Software in any form where
+   third parties can interact with it without your direct involvement. Running
+   a bot that other server owners can invite to their guilds — under any name,
+   branding, or fork — requires written permission from the copyright holders.
+
+2. **No hosting as a service.** You may not offer the Software, or any
+   modified version of it, as a service — whether free or paid — to third
+   parties. You may not create a "public NightPigeon" or derivative thereof
+   for others to use.
+
+3. **Attribution.** Any fork or redistribution of the source code must retain
+   the original copyright notice and this license file in full.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,0 +1,528 @@
+import { Client, Message, EmbedBuilder, GuildMember, TextChannel } from "discord.js";
+import type { Command } from "../types";
+import {
+  listAutoreplyRules,
+  getAutoreplyRule,
+  addAutoreplyRule,
+  removeAutoreplyRule,
+  updateAutoreplyRule,
+  generateReplyId,
+  loadYamlReplies,
+  checkAndSetUserCooldown,
+  checkAndSetGlobalCooldown,
+  type AutoreplyRule,
+  type AutoreplyTriggerType,
+  type AutoreplyReplyType,
+} from "../../store/autoreply";
+import { getUserLevel } from "../../lib/yamlLevels";
+import { getGuildConfig } from "../../store/guildConfig";
+import { logger } from "../../../lib/logger";
+
+const VALID_TRIGGER_TYPES: AutoreplyTriggerType[] = ["contains", "exact", "startswith", "endswith", "regex"];
+const VALID_REPLY_TYPES: AutoreplyReplyType[] = ["message", "reply", "dm", "reply_dm"];
+
+function makeDefaultRule(
+  guildId: string,
+  id: string,
+  trigger_type: AutoreplyTriggerType,
+  trigger: string,
+  response: string
+): AutoreplyRule {
+  return {
+    id,
+    guildId,
+    trigger_type,
+    trigger,
+    match_case: false,
+    reply_type: "reply",
+    response,
+    delete_trigger: false,
+    delete_after: 0,
+    cooldown_seconds: 0,
+    global_cooldown_seconds: 0,
+    only_channels: [],
+    ignore_channels: [],
+    only_roles: [],
+    ignore_roles: [],
+    ignore_users: [],
+    min_length: 0,
+    max_length: 0,
+    require_prefix: false,
+    enabled: true,
+    source: "db",
+  };
+}
+
+function applyTemplateVars(text: string, message: Message): string {
+  const guild = message.guild!;
+  const author = message.author;
+  const member = message.member as GuildMember | null;
+  const channel = message.channel as TextChannel;
+  const now = new Date();
+
+  return text
+    .replace(/\{user\.mention\}/g, `<@${author.id}>`)
+    .replace(/\{user\.id\}/g, author.id)
+    .replace(/\{user\.name\}/g, member?.displayName ?? author.globalName ?? author.username)
+    .replace(/\{user\}/g, author.username)
+    .replace(/\{server\.id\}/g, guild.id)
+    .replace(/\{server\.member_count\}/g, String(guild.memberCount))
+    .replace(/\{server\.icon\}/g, guild.iconURL() ?? "")
+    .replace(/\{server\}/g, guild.name)
+    .replace(/\{channel\.mention\}/g, `<#${channel.id}>`)
+    .replace(/\{channel\.id\}/g, channel.id)
+    .replace(/\{channel\}/g, channel.name ?? channel.id)
+    .replace(/\{timestamp\.date\}/g, now.toLocaleDateString())
+    .replace(/\{timestamp\.time\}/g, now.toLocaleTimeString())
+    .replace(/\{timestamp\}/g, now.toLocaleString());
+}
+
+function matchesTrigger(rule: AutoreplyRule, content: string): boolean {
+  const cmp = rule.match_case ? content : content.toLowerCase();
+  const trig = rule.match_case ? rule.trigger : rule.trigger.toLowerCase();
+
+  if (rule.trigger_type === "exact") {
+    if (rule.trigger === "") return true;
+    return cmp === trig;
+  }
+  if (rule.trigger_type === "contains") return cmp.includes(trig);
+  if (rule.trigger_type === "startswith") return cmp.startsWith(trig);
+  if (rule.trigger_type === "endswith") return cmp.endsWith(trig);
+  if (rule.trigger_type === "regex") {
+    try {
+      const flags = rule.match_case ? "" : "i";
+      return new RegExp(rule.trigger, flags).test(content);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function memberHasRole(member: GuildMember, roleIds: string[]): boolean {
+  return roleIds.some((id) => member.roles.cache.has(id));
+}
+
+async function sendResponse(
+  rule: AutoreplyRule,
+  message: Message,
+  responseText: string
+): Promise<void> {
+  const ch = message.channel as TextChannel;
+
+  let sent: Message | null = null;
+
+  if (rule.reply_type === "message") {
+    sent = await ch.send(responseText).catch(() => null);
+  } else if (rule.reply_type === "reply") {
+    sent = await message.reply(responseText).catch(() => null);
+  } else if (rule.reply_type === "dm") {
+    await message.author.send(responseText).catch(() => {});
+  } else if (rule.reply_type === "reply_dm") {
+    sent = await message.reply(responseText).catch(() => null);
+    await message.author.send(responseText).catch(() => {});
+  }
+
+  if (sent && rule.delete_after > 0) {
+    setTimeout(() => {
+      sent!.delete().catch(() => {});
+    }, rule.delete_after * 1000);
+  }
+}
+
+export async function handleAutoreply(message: Message): Promise<void> {
+  if (!message.guild || !message.member) return;
+
+  const guildId = message.guild.id;
+  const cfg = await getGuildConfig(guildId);
+  const pluginCfg: any = (cfg as any).plugins?.autoreply ?? (cfg as any).autoreply;
+
+  if (pluginCfg?.enabled === false) return;
+  if (pluginCfg?.ignore_self !== false && message.author.id === message.client.user?.id) return;
+  if ((pluginCfg?.ignore_bots !== false) && message.author.bot) return;
+
+  if (Array.isArray(pluginCfg?.replies) && pluginCfg.replies.length > 0) {
+    loadYamlReplies(guildId, pluginCfg.replies);
+  }
+
+  const rules = listAutoreplyRules(guildId).filter((r) => r.enabled);
+  const content = message.content;
+  const channelId = message.channelId;
+  const member = message.member as GuildMember;
+
+  for (const rule of rules) {
+    if (rule.ignore_channels.length > 0 && rule.ignore_channels.includes(channelId)) continue;
+    if (rule.only_channels.length > 0 && !rule.only_channels.includes(channelId)) continue;
+
+    if (rule.ignore_roles.length > 0 && memberHasRole(member, rule.ignore_roles)) continue;
+    if (rule.only_roles.length > 0 && !memberHasRole(member, rule.only_roles)) continue;
+
+    if (rule.ignore_users.length > 0 && rule.ignore_users.includes(message.author.id)) continue;
+
+    if (rule.min_length > 0 && content.length < rule.min_length) continue;
+    if (rule.max_length > 0 && content.length > rule.max_length) continue;
+
+    if (!checkAndSetUserCooldown(guildId, rule.id, message.author.id, rule.cooldown_seconds)) continue;
+    if (!checkAndSetGlobalCooldown(guildId, rule.id, rule.global_cooldown_seconds)) continue;
+
+    if (!matchesTrigger(rule, content)) continue;
+
+    if (rule.delete_trigger) {
+      await message.delete().catch(() => {});
+    }
+
+    const responseText = applyTemplateVars(rule.response, message);
+    await sendResponse(rule, message, responseText);
+
+    return;
+  }
+}
+
+const autoreplyCmd: Command = {
+  name: "autoreply",
+  aliases: [],
+  usage: "<subcommand> [args]",
+  description: "Automatically reply to messages matching a trigger.",
+
+  async execute(message: Message, args: string[], _client: Client) {
+    if (!message.guild) return;
+    const userLevel = getUserLevel(message);
+    if (userLevel < 50) return void message.reply("❌ You need level 50+ to manage autoreplies.");
+
+    const sub = args[0]?.toLowerCase();
+    const guildId = message.guild.id;
+
+    if (sub === "add") {
+      const type = args[1]?.toLowerCase() as AutoreplyTriggerType | undefined;
+      if (!type || !VALID_TRIGGER_TYPES.includes(type)) {
+        return void message.reply(
+          `❌ Usage: \`!autoreply add <${VALID_TRIGGER_TYPES.join("|")}> <trigger> <response>\``
+        );
+      }
+      const trigger = args[2] ?? "";
+      const response = args.slice(3).join(" ");
+      if (!response) return void message.reply("❌ Provide a response.");
+
+      if (type === "regex") {
+        try { new RegExp(trigger); } catch (e: any) {
+          return void message.reply(`❌ Invalid regex pattern: ${e.message}`);
+        }
+      }
+
+      const id = generateReplyId(guildId);
+      const rule = makeDefaultRule(guildId, id, type, trigger, response);
+      await addAutoreplyRule(rule);
+      return void message.reply(
+        `✅ Auto reply **${trigger || "(empty)"}** added | ID: \`${id}\` | Type: ${type}`
+      );
+    }
+
+    if (sub === "remove") {
+      const id = args[1];
+      if (!id) return void message.reply("❌ Usage: `!autoreply remove <id>`");
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only — remove them from your config file.");
+      const removed = await removeAutoreplyRule(guildId, id);
+      return void message.reply(removed ? `✅ Auto reply \`${id}\` removed.` : `❌ No rule with ID \`${id}\`.`);
+    }
+
+    if (sub === "list") {
+      const rules = listAutoreplyRules(guildId);
+      if (rules.length === 0) {
+        return void message.reply("No auto reply rules configured — use `!autoreply add` to create one.");
+      }
+
+      const lines = rules.map((r) => {
+        const src = r.source === "yaml" ? " 📄" : "";
+        return `**\`${r.id}\`**${src} \`${r.trigger_type}\` · \`${r.trigger || "(empty)"}\` · ${r.reply_type} ${r.enabled ? "✅" : "❌"}`;
+      });
+
+      const chunks: string[][] = [];
+      let current: string[] = [];
+      for (const line of lines) {
+        if (current.join("\n").length + line.length > 3800) {
+          chunks.push(current);
+          current = [];
+        }
+        current.push(line);
+      }
+      if (current.length) chunks.push(current);
+
+      for (let i = 0; i < chunks.length; i++) {
+        const embed = new EmbedBuilder()
+          .setColor(0x5865f2)
+          .setTitle(i === 0 ? "💬 Autoreply Rules" : "💬 Autoreply Rules (cont.)")
+          .setDescription(chunks[i].join("\n"))
+          .setFooter({ text: `${rules.length} rule(s) total · 📄 = YAML (read-only)` });
+        await (message.channel as any).send({ embeds: [embed] });
+      }
+      return;
+    }
+
+    if (sub === "info") {
+      const id = args[1];
+      if (!id) return void message.reply("❌ Usage: `!autoreply info <id>`");
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle(`💬 Autoreply Rule: ${id}`)
+        .addFields(
+          { name: "Source", value: rule.source === "yaml" ? "📄 YAML (read-only)" : "🗄️ Database", inline: true },
+          { name: "Status", value: rule.enabled ? "✅ Enabled" : "❌ Disabled", inline: true },
+          { name: "Trigger Type", value: `\`${rule.trigger_type}\``, inline: true },
+          { name: "Trigger", value: rule.trigger ? `\`${rule.trigger}\`` : "(empty — matches all messages)", inline: false },
+          { name: "Case Sensitive", value: rule.match_case ? "Yes" : "No", inline: true },
+          { name: "Reply Type", value: `\`${rule.reply_type}\``, inline: true },
+          { name: "Delete Trigger", value: rule.delete_trigger ? "Yes" : "No", inline: true },
+          { name: "Delete After", value: rule.delete_after > 0 ? `${rule.delete_after}s` : "Never", inline: true },
+          { name: "Per-user Cooldown", value: rule.cooldown_seconds > 0 ? `${rule.cooldown_seconds}s` : "None", inline: true },
+          { name: "Global Cooldown", value: rule.global_cooldown_seconds > 0 ? `${rule.global_cooldown_seconds}s` : "None", inline: true },
+          { name: "Min Length", value: rule.min_length > 0 ? String(rule.min_length) : "None", inline: true },
+          { name: "Max Length", value: rule.max_length > 0 ? String(rule.max_length) : "None", inline: true },
+          { name: "Only Channels", value: rule.only_channels.length > 0 ? rule.only_channels.map((c) => `<#${c}>`).join(" ") : "All channels", inline: false },
+          { name: "Ignore Channels", value: rule.ignore_channels.length > 0 ? rule.ignore_channels.map((c) => `<#${c}>`).join(" ") : "None", inline: false },
+          { name: "Only Roles", value: rule.only_roles.length > 0 ? rule.only_roles.map((r) => `<@&${r}>`).join(" ") : "All roles", inline: false },
+          { name: "Ignore Roles", value: rule.ignore_roles.length > 0 ? rule.ignore_roles.map((r) => `<@&${r}>`).join(" ") : "None", inline: false },
+          { name: "Response", value: rule.response.slice(0, 1024) || "(empty)", inline: false }
+        );
+      return void (message.channel as any).send({ embeds: [embed] });
+    }
+
+    if (sub === "enable" || sub === "disable") {
+      const id = args[1];
+      if (!id) return void message.reply(`❌ Usage: \`!autoreply ${sub} <id>\``);
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      const updated = await updateAutoreplyRule(guildId, id, { enabled: sub === "enable" });
+      return void message.reply(updated ? `✅ Auto reply \`${id}\` ${sub}d.` : `❌ No rule with ID \`${id}\`.`);
+    }
+
+    if (sub === "edit") {
+      const id = args[1];
+      const field = args[2]?.toLowerCase();
+
+      if (!id || !field) {
+        return void message.reply(
+          "❌ Usage:\n" +
+          "`!autoreply edit <id> response <text>`\n" +
+          "`!autoreply edit <id> trigger <text>`\n" +
+          "`!autoreply edit <id> type <trigger_type>`\n" +
+          "`!autoreply edit <id> replytype <reply_type>`"
+        );
+      }
+
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+
+      if (field === "response") {
+        const newResponse = args.slice(3).join(" ");
+        if (!newResponse) return void message.reply("❌ Provide a new response.");
+        await updateAutoreplyRule(guildId, id, { response: newResponse });
+        return void message.reply(`✅ Auto reply \`${id}\` response updated.`);
+      }
+
+      if (field === "trigger") {
+        const newTrigger = args.slice(3).join(" ");
+        await updateAutoreplyRule(guildId, id, { trigger: newTrigger });
+        return void message.reply(`✅ Auto reply \`${id}\` trigger updated to \`${newTrigger || "(empty)"}\`.`);
+      }
+
+      if (field === "type") {
+        const newType = args[3]?.toLowerCase() as AutoreplyTriggerType | undefined;
+        if (!newType || !VALID_TRIGGER_TYPES.includes(newType)) {
+          return void message.reply(`❌ Valid types: \`${VALID_TRIGGER_TYPES.join("`, `")}\``);
+        }
+        if (newType === "regex") {
+          try { new RegExp(rule.trigger); } catch (e: any) {
+            return void message.reply(`❌ Current trigger is not a valid regex: ${e.message}`);
+          }
+        }
+        await updateAutoreplyRule(guildId, id, { trigger_type: newType });
+        return void message.reply(`✅ Auto reply \`${id}\` trigger type updated to \`${newType}\`.`);
+      }
+
+      if (field === "replytype") {
+        const newReplyType = args[3]?.toLowerCase() as AutoreplyReplyType | undefined;
+        if (!newReplyType || !VALID_REPLY_TYPES.includes(newReplyType)) {
+          return void message.reply(`❌ Valid reply types: \`${VALID_REPLY_TYPES.join("`, `")}\``);
+        }
+        await updateAutoreplyRule(guildId, id, { reply_type: newReplyType });
+        return void message.reply(`✅ Auto reply \`${id}\` reply type changed to \`${newReplyType}\`.`);
+      }
+
+      return void message.reply("❌ Unknown field. Use `response`, `trigger`, `type`, or `replytype`.");
+    }
+
+    if (sub === "toggle") {
+      const field = args[1]?.toLowerCase();
+      const id = args[2];
+
+      if (field === "deletetrigger") {
+        if (!id) return void message.reply("❌ Usage: `!autoreply toggle deletetrigger <id>`");
+        const rule = getAutoreplyRule(guildId, id);
+        if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+        if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+        const newVal = !rule.delete_trigger;
+        await updateAutoreplyRule(guildId, id, { delete_trigger: newVal });
+        return void message.reply(`✅ Delete trigger for \`${id}\` is now **${newVal ? "enabled" : "disabled"}**.`);
+      }
+
+      return void message.reply("❌ Usage: `!autoreply toggle deletetrigger <id>`");
+    }
+
+    if (sub === "cooldown") {
+      const id = args[1];
+      const seconds = parseInt(args[2] ?? "");
+      if (!id || isNaN(seconds) || seconds < 0) {
+        return void message.reply("❌ Usage: `!autoreply cooldown <id> <seconds>`");
+      }
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { cooldown_seconds: seconds });
+      return void message.reply(`✅ Cooldown for \`${id}\` set to **${seconds}** seconds.`);
+    }
+
+    if (sub === "globalcooldown") {
+      const id = args[1];
+      const seconds = parseInt(args[2] ?? "");
+      if (!id || isNaN(seconds) || seconds < 0) {
+        return void message.reply("❌ Usage: `!autoreply globalcooldown <id> <seconds>`");
+      }
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { global_cooldown_seconds: seconds });
+      return void message.reply(`✅ Global cooldown for \`${id}\` set to **${seconds}** seconds.`);
+    }
+
+    if (sub === "deleteafter") {
+      const id = args[1];
+      const seconds = parseInt(args[2] ?? "");
+      if (!id || isNaN(seconds) || seconds < 0) {
+        return void message.reply("❌ Usage: `!autoreply deleteafter <id> <seconds>` (0 = never)");
+      }
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { delete_after: seconds });
+      return void message.reply(
+        seconds > 0
+          ? `✅ Bot response for \`${id}\` will auto-delete after **${seconds}** seconds.`
+          : `✅ Auto-delete disabled for \`${id}\`.`
+      );
+    }
+
+    if (sub === "addchannel") {
+      const id = args[1];
+      const channelArg = args[2];
+      if (!id || !channelArg) return void message.reply("❌ Usage: `!autoreply addchannel <id> <#channel>`");
+      const channelId = channelArg.replace(/[<#>]/g, "");
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      if (rule.only_channels.includes(channelId)) return void message.reply("❌ Channel already in the list.");
+      await updateAutoreplyRule(guildId, id, { only_channels: [...rule.only_channels, channelId] });
+      return void message.reply(`✅ Channel <#${channelId}> added to rule \`${id}\` (only_channels).`);
+    }
+
+    if (sub === "removechannel") {
+      const id = args[1];
+      const channelArg = args[2];
+      if (!id || !channelArg) return void message.reply("❌ Usage: `!autoreply removechannel <id> <#channel>`");
+      const channelId = channelArg.replace(/[<#>]/g, "");
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { only_channels: rule.only_channels.filter((c) => c !== channelId) });
+      return void message.reply(`✅ Channel <#${channelId}> removed from rule \`${id}\`.`);
+    }
+
+    if (sub === "addrole") {
+      const id = args[1];
+      const roleArg = args[2];
+      if (!id || !roleArg) return void message.reply("❌ Usage: `!autoreply addrole <id> <@role>`");
+      const roleId = roleArg.replace(/[<@&>]/g, "");
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      if (rule.only_roles.includes(roleId)) return void message.reply("❌ Role already in the list.");
+      await updateAutoreplyRule(guildId, id, { only_roles: [...rule.only_roles, roleId] });
+      return void message.reply(`✅ Role <@&${roleId}> added to rule \`${id}\` (only_roles).`);
+    }
+
+    if (sub === "removerole") {
+      const id = args[1];
+      const roleArg = args[2];
+      if (!id || !roleArg) return void message.reply("❌ Usage: `!autoreply removerole <id> <@role>`");
+      const roleId = roleArg.replace(/[<@&>]/g, "");
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { only_roles: rule.only_roles.filter((r) => r !== roleId) });
+      return void message.reply(`✅ Role <@&${roleId}> removed from rule \`${id}\`.`);
+    }
+
+    if (sub === "setminlength") {
+      const id = args[1];
+      const length = parseInt(args[2] ?? "");
+      if (!id || isNaN(length) || length < 0) {
+        return void message.reply("❌ Usage: `!autoreply setminlength <id> <length>`");
+      }
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { min_length: length });
+      return void message.reply(`✅ Min length for \`${id}\` set to **${length}**.`);
+    }
+
+    if (sub === "setmaxlength") {
+      const id = args[1];
+      const length = parseInt(args[2] ?? "");
+      if (!id || isNaN(length) || length < 0) {
+        return void message.reply("❌ Usage: `!autoreply setmaxlength <id> <length>`");
+      }
+      const rule = getAutoreplyRule(guildId, id);
+      if (!rule) return void message.reply(`❌ No rule with ID \`${id}\`.`);
+      if (rule.source === "yaml") return void message.reply("❌ YAML rules are read-only.");
+      await updateAutoreplyRule(guildId, id, { max_length: length });
+      return void message.reply(`✅ Max length for \`${id}\` set to **${length}** (0 = unlimited).`);
+    }
+
+    const helpEmbed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("💬 Autoreply — Subcommands")
+      .setDescription(
+        "**Management**\n" +
+        "`!autoreply add <type> <trigger> <response>` — create a rule\n" +
+        "`!autoreply remove <id>` — delete a rule\n" +
+        "`!autoreply list` — list all rules\n" +
+        "`!autoreply info <id>` — view rule details\n" +
+        "`!autoreply enable/disable <id>` — toggle a rule\n\n" +
+        "**Editing**\n" +
+        "`!autoreply edit <id> response <text>` — change response\n" +
+        "`!autoreply edit <id> trigger <text>` — change trigger text\n" +
+        "`!autoreply edit <id> type <type>` — change trigger type\n" +
+        "`!autoreply edit <id> replytype <type>` — change reply type\n\n" +
+        "**Behaviour**\n" +
+        "`!autoreply toggle deletetrigger <id>` — toggle message deletion\n" +
+        "`!autoreply cooldown <id> <seconds>` — per-user cooldown\n" +
+        "`!autoreply globalcooldown <id> <seconds>` — rule-wide cooldown\n" +
+        "`!autoreply deleteafter <id> <seconds>` — auto-delete bot response\n\n" +
+        "**Filters**\n" +
+        "`!autoreply addchannel/removechannel <id> <#ch>` — channel filter\n" +
+        "`!autoreply addrole/removerole <id> <@role>` — role filter\n" +
+        "`!autoreply setminlength/setmaxlength <id> <n>` — length filter\n\n" +
+        "**Trigger Types:** `contains` · `exact` · `startswith` · `endswith` · `regex`\n" +
+        "**Reply Types:** `message` · `reply` · `dm` · `reply_dm`"
+      );
+    return void (message.channel as any).send({ embeds: [helpEmbed] });
+  },
+};
+
+export default autoreplyCmd;
