@@ -6,15 +6,6 @@ export interface SchemaField {
   children?: SchemaField[];
 }
 
-export interface CommandDoc {
-  trigger: string;
-  aliases?: string[];
-  usage: string;
-  description: string;
-  permissions?: string;
-  examples?: string[];
-}
-
 export interface DocPage {
   id: string;
   title: string;
@@ -23,7 +14,6 @@ export interface DocPage {
   configKey?: string;
   defaultConfig?: string;
   schema?: SchemaField[];
-  commands?: CommandDoc[];
 }
 
 export interface DocSection {
