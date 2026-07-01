@@ -12,6 +12,76 @@ import { Extension } from "@codemirror/state";
 type SaveState = "idle" | "saving" | "saved" | "error";
 type CopyState = "idle" | "copied";
 
+// ── Built-in command names + their bot-level aliases ─────────────────────────
+const BUILTIN_COMMANDS = new Set([
+  "addcase","addrole","ar","autoclean","automod-escalation","autoreaction",
+  "autoreply","av","avatar","ban","baninfo","banlist","banner","botinfo",
+  "botstats","case","casecount","cases","casesearch","cc","channelinfo",
+  "charcount","ci","cleanup","deletecase","deletenote","delreminder","editcase",
+  "editnote","embed","escalation","exportcases","firstmsg","forceban",
+  "forcemute","forcenote","forceunmute","forcewarn","goodbye","guildinfo",
+  "help","hide","inrole","inviteinfo","inviteleaderboard","invitereset",
+  "invites","joined","kick","level","levels","lock","locknick","massban",
+  "massforceban","massforcemute","massforcewarn","masskick","massmute",
+  "massremoverole","massrole","masstemprole","massunban","massunmute",
+  "masswarn","mc","membercount","mn","modnick","modstats","mute","muteinfo",
+  "mutelist","nick","note","notesearch","pfp","ping","purge","raidmode",
+  "remind","reminders","removerole","resetnick","ri","roleban","rolebanned",
+  "roleinfo","roles","rr","seen","servercases","serverinfo","si","slowmode",
+  "slowmodeinfo","snowflake","softban","starboard","tag","tempban","tempmute",
+  "temprole","temproles","ticket","time","timeconvert","timefor","timezone",
+  "ui","unban","unhide","unlock","unlocknick","unmute","unroleban","unwatch",
+  "userinfo","viewnote","viewnotes","warn","warncount","watch","watchlist",
+  "welcome","welcomedm","whois",
+]);
+
+/**
+ * Checks tag names and command alias names for conflicts with:
+ *  - Built-in bot commands
+ *  - Each other (a tag name used as an alias name or vice-versa)
+ * Returns a human-readable error string, or "" if all clear.
+ */
+function findNameConflicts(parsed: unknown): string {
+  if (!parsed || typeof parsed !== "object") return "";
+  const cfg = parsed as Record<string, unknown>;
+
+  const rawTags = cfg.tags;
+  const tagNames: string[] = rawTags && typeof rawTags === "object" && !Array.isArray(rawTags)
+    ? Object.keys(rawTags as Record<string, unknown>)
+    : [];
+
+  const plugins = cfg.plugins as Record<string, unknown> | undefined;
+  const aliasPlugin = plugins?.command_aliases as Record<string, unknown> | undefined;
+  const aliasConfig = aliasPlugin?.config as Record<string, unknown> | undefined;
+  const rawAliases = aliasConfig?.aliases;
+  const aliasNames: string[] = rawAliases && typeof rawAliases === "object" && !Array.isArray(rawAliases)
+    ? Object.keys(rawAliases as Record<string, unknown>)
+    : [];
+
+  const aliasSet = new Set(aliasNames.map(n => n.toLowerCase()));
+  const tagSet   = new Set(tagNames.map(n => n.toLowerCase()));
+
+  // Check tags
+  for (const name of tagNames) {
+    const lower = name.toLowerCase();
+    if (BUILTIN_COMMANDS.has(lower))
+      return `Tag "${name}" conflicts with a built-in bot command.`;
+    if (aliasSet.has(lower))
+      return `Tag "${name}" conflicts with a command alias of the same name.`;
+  }
+
+  // Check aliases
+  for (const name of aliasNames) {
+    const lower = name.toLowerCase();
+    if (BUILTIN_COMMANDS.has(lower))
+      return `Command alias "${name}" conflicts with a built-in bot command.`;
+    if (tagSet.has(lower))
+      return `Command alias "${name}" conflicts with a tag of the same name.`;
+  }
+
+  return "";
+}
+
 /**
  * Returns true if a YAML key name corresponds to a user-facing DM message
  * that must include a server name variable.
@@ -245,14 +315,22 @@ export default function YamlConfig() {
     setErrorMsg("");
     try {
       const parsed = yaml.load(v);
+
       const dmViolations = findDmViolations(parsed);
       if (dmViolations.length > 0) {
         const first = dmViolations[0];
         const extra = dmViolations.length > 1 ? ` (+${dmViolations.length - 1} more)` : "";
         setValidationError(`dm_message must include {server}: ${first}${extra}`);
-      } else {
-        setValidationError("");
+        return;
       }
+
+      const nameConflict = findNameConflicts(parsed);
+      if (nameConflict) {
+        setValidationError(nameConflict);
+        return;
+      }
+
+      setValidationError("");
     } catch (e: any) {
       setValidationError(e.message ?? "Invalid YAML");
     }
