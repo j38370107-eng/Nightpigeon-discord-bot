@@ -1295,6 +1295,104 @@ With this setup, your mods can do full, properly-logged moderation actions in se
 - **Fallback** — If the supplied reason does not match any preset key, it is used as-is. Regular reasons always work.
 - **Audit trail** — The full expanded text is what appears in the case log, mod log channel, DM to the user, and any exported CSV. Staff never see the short key in case records.`,
       },
+      {
+        id: "case-expirations",
+        title: "Case Expirations",
+        type: "article",
+        content: `# Case Expirations
+
+Staff can configure how long a case stays **active** before it automatically expires — separately for cases created by **human moderators** and cases created by **automod** (YAML automod rules, antinuke, antiraid). This is a single settings block that applies across every case type: \`warn\`, \`mute\`, \`kick\`, \`ban\`, and \`note\`.
+
+An "expired" case is never deleted. It still shows up in \`!cases\`, \`!servercases\`, and \`!case <id>\` history exactly like any other case — it's simply excluded from active escalation / warning counts once its expiry time passes, and \`!case <id>\` marks it **⏳ Expired** so staff can tell at a glance.
+
+This is separate from — and stacks with — the \`warning_expiry\` setting inside \`punishment_escalation\`. If both are configured, whichever expiry comes first wins for that individual case.
+
+## How it works
+
+1. A case is created (manually via a mod command, or automatically via automod/antiraid/antinuke).
+2. If the case doesn't already carry a natural expiry (e.g. a \`!mute\` or \`!tempban\` with an explicit duration keeps its own timeout-based expiry), the bot looks up the duration configured for that case's type under \`manual\` or \`automod\` — whichever matches how the case was created.
+3. If a duration is configured, \`expiresAt\` is set to \`created_at + duration\`. If left \`null\` (or omitted), that case type never auto-expires.
+4. Once \`expiresAt\` passes, the case stops counting toward active warnings/escalation, exactly like a case that was force-expired with \`!escalation reset\`.
+
+## Configuration
+
+\`\`\`yaml
+case_expirations:
+  config:
+    enabled: true
+
+    # Expiry durations for cases created by real moderators using commands
+    # (!warn, !mute, !kick, !ban, !note). Accepts duration strings like
+    # 10m, 6h, 30d, 2w — or null for "never expires".
+    manual:
+      warn: "30d"
+      mute: null
+      kick: null
+      ban: null
+      note: null
+
+    # Expiry durations for cases created automatically — YAML automod rule
+    # actions, antiraid responses, and antinuke responses.
+    automod:
+      warn: "14d"
+      mute: null
+      kick: null
+      ban: null
+\`\`\`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| \`enabled\` | boolean | \`false\` | Turns the whole case-expirations system on or off. When \`false\`, cases never auto-expire from this system (they can still expire via \`punishment_escalation.warning_expiry\` or a manual \`!escalation reset\`). |
+| \`manual.<type>\` | string \\| null | \`null\` | Expiry duration for a case of \`<type>\` (\`warn\`, \`mute\`, \`kick\`, \`ban\`, \`note\`) created by a human moderator command. \`null\` = never expires. |
+| \`automod.<type>\` | string \\| null | \`null\` | Same as above, but for cases created automatically by automod rules, antiraid, or antinuke. |
+
+## Why separate manual vs. automod?
+
+Automod rules can fire far more often than a human moderator would warn someone, so it's common to want automod-issued warnings to fade away faster than warnings a real moderator hands out deliberately. Configuring the two independently means you can, for example, let automod warnings expire after 14 days while manual warnings from staff stick around for 30 — matching how much weight each type of action should carry over time.
+
+## Interaction with existing durations
+
+- **Timed mutes/bans** (\`!mute 1h\`, \`!tempban 7d\`, automod \`duration:\` fields) already compute their own \`expiresAt\` from the duration you pass to the command or rule — \`case_expirations\` does **not** override that. It only fills in an expiry when the case wouldn't otherwise get one (mainly \`warn\`, \`kick\`, \`ban\` with no duration, and \`note\`).
+- **\`punishment_escalation.config.global.warning_expiry\`** is a separate, warn-only expiry used specifically for escalation step counting. You can use \`case_expirations\` and \`punishment_escalation\` together, or just one of them — they don't conflict.`,
+        schema: [
+          { key: "enabled", type: "boolean", default: "false", description: "Enable the case expirations system" },
+          {
+            key: "manual", type: "object", description: "Expiry durations for cases created by human moderator commands",
+            children: [
+              { key: "manual.warn", type: "string | null", default: "null", description: "How long a manually-issued warn case stays active. e.g. \"30d\". null = never expires." },
+              { key: "manual.mute", type: "string | null", default: "null", description: "How long a manually-issued mute case stays active before its case record is considered expired. null = never expires." },
+              { key: "manual.kick", type: "string | null", default: "null", description: "How long a manually-issued kick case stays active. null = never expires." },
+              { key: "manual.ban", type: "string | null", default: "null", description: "How long a manually-issued ban case stays active. null = never expires." },
+              { key: "manual.note", type: "string | null", default: "null", description: "How long a manually-added note stays active. null = never expires." },
+            ],
+          },
+          {
+            key: "automod", type: "object", description: "Expiry durations for cases created automatically by automod rules, antiraid, and antinuke",
+            children: [
+              { key: "automod.warn", type: "string | null", default: "null", description: "How long an automod-issued warn case stays active. e.g. \"14d\". null = never expires." },
+              { key: "automod.mute", type: "string | null", default: "null", description: "How long an automod-issued mute case stays active. null = never expires." },
+              { key: "automod.kick", type: "string | null", default: "null", description: "How long an automod-issued kick case stays active. null = never expires." },
+              { key: "automod.ban", type: "string | null", default: "null", description: "How long an automod-issued ban case stays active. null = never expires." },
+            ],
+          },
+        ],
+        defaultConfig: `case_expirations:
+  config:
+    enabled: false
+
+    manual:
+      warn: "30d"
+      mute: null
+      kick: null
+      ban: null
+      note: null
+
+    automod:
+      warn: "14d"
+      mute: null
+      kick: null
+      ban: null`,
+      },
     ],
   },
 
@@ -6793,7 +6891,28 @@ Bypass is checked before any rules run. A member is skipped entirely if any of t
 | \`{trigger}\` | The old (violating) nickname |
 | \`{reason}\` | The new (enforced) nickname |
 | \`{count}\` | The rule that triggered (e.g. \`hoist\`, \`zalgo\`) |
-| \`{timestamp}\` | Current timestamp |`,
+| \`{timestamp}\` | Current timestamp |
+
+## Case-Sensitive Matching
+
+By default, **\`bad_words\`** and **\`custom_patterns\`** match without regard to letter casing — \`admin\`, \`Admin\`, and \`ADMIN\` are all treated the same. Set \`case_sensitive: true\` on either rule if you need to match an exact casing only:
+
+\`\`\`yaml
+rules:
+  bad_words:
+    enabled: true
+    custom_words: ["OwnerOnly"]
+    case_sensitive: true   # only flags "OwnerOnly" exactly — not "owneronly" or "OWNERONLY"
+
+  custom_patterns:
+    enabled: true
+    patterns: ["^VIP-"]
+    case_sensitive: true   # only flags names starting with "VIP-", not "vip-" or "Vip-"
+\`\`\`
+
+This is useful when a specific casing is reserved for staff-assigned nicknames (e.g. a "VIP-" prefix that only staff apply) and you don't want the rule to also catch members who happen to type the same letters in lowercase. \`whole_word_only\` and l33tspeak \`normalize_map\` substitution still apply on top of case-sensitive matching for \`bad_words\`.
+
+Other rules (\`impersonation\`, \`mass_mentions\`, \`hoist\`, etc.) remain case-insensitive — case sensitivity only applies to \`bad_words\` and \`custom_patterns\`, since those are the only two rules built from staff-supplied text.`,
         schema: [
           { key: "enabled", type: "boolean", default: "false", description: "Enable the modnick plugin" },
           { key: "default_name", type: "string", default: '"Moderated Nickname"', description: "Nickname applied when a rule violation is detected. Used when random_names is empty or exhausted. Max 32 characters." },
@@ -6823,6 +6942,7 @@ Bypass is checked before any rules run. A member is skipped entirely if any of t
               { key: "rules.bad_words.custom_words", type: "string[]", default: "[]", description: "Additional words to check specifically for nicknames (e.g. admin, staff, owner)" },
               { key: "rules.bad_words.normalize_map", type: "object", default: '{"0":"o","1":"i","3":"e","4":"a","5":"s","7":"t","@":"a","$":"s","!":"i"}', description: "L33tspeak substitution map applied before word-list matching. Catches variants like 4dm1n → admin." },
               { key: "rules.bad_words.whole_word_only", type: "boolean", default: "false", description: "If true, only flags when the bad word is a complete word. If false, flags any substring match." },
+              { key: "rules.bad_words.case_sensitive", type: "boolean", default: "false", description: "If true, words are matched with exact casing (e.g. 'Admin' no longer also matches 'admin' or 'ADMIN'). Leave false for the normal case-insensitive behavior." },
               { key: "rules.impersonation.enabled", type: "boolean", default: "false", description: "Detect nicknames that closely match protected names or specific users' display names" },
               { key: "rules.impersonation.protected_names", type: "string[]", default: "[]", description: "Exact names or display names that are protected. Comparison is case-insensitive with normalize_map applied." },
               { key: "rules.impersonation.protected_users", type: "snowflake[]", default: "[]", description: "User IDs whose current usernames/display names are automatically protected" },
@@ -6835,7 +6955,8 @@ Bypass is checked before any rules run. A member is skipped entirely if any of t
               { key: "rules.too_long.enabled", type: "boolean", default: "false", description: "Enforce a shorter maximum nickname length than Discord's 32-character limit" },
               { key: "rules.too_long.max_length", type: "number", default: "25", description: "Maximum nickname length in characters. Must be 32 or less." },
               { key: "rules.custom_patterns.enabled", type: "boolean", default: "false", description: "Test each nickname against a list of custom regex patterns" },
-              { key: "rules.custom_patterns.patterns", type: "string[]", default: "[]", description: "List of regex pattern strings tested case-insensitively against the full nickname (e.g. discord\\.gg, https?://)" },
+              { key: "rules.custom_patterns.patterns", type: "string[]", default: "[]", description: "List of regex pattern strings tested against the full nickname (e.g. discord\\.gg, https?://)" },
+              { key: "rules.custom_patterns.case_sensitive", type: "boolean", default: "false", description: "If true, patterns are evaluated with exact casing instead of case-insensitively." },
             ],
           },
           {
@@ -6918,6 +7039,7 @@ Bypass is checked before any rules run. A member is skipped entirely if any of t
           "$": "s"
           "!": "i"
         whole_word_only: false
+        case_sensitive: false
 
       impersonation:
         enabled: false
@@ -6941,6 +7063,7 @@ Bypass is checked before any rules run. A member is skipped entirely if any of t
       custom_patterns:
         enabled: false
         patterns: []
+        case_sensitive: false
 
     action:
       type: "rename"

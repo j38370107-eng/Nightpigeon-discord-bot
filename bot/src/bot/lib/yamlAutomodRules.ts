@@ -500,7 +500,7 @@ async function executeAction(
           modId: botId,
           modTag: botTag,
           reason,
-        });
+        }, { isAutomod: true });
         // Check plugins.escalation.auto thresholds (automod-only counter)
         await checkAutoEscalation(client, member.guild, member.user.id, member.user.tag, "warn").catch(() => {});
         break;
@@ -540,7 +540,7 @@ async function executeAction(
           modTag: botTag,
           reason,
           duration: action.duration,
-        });
+        }, { isAutomod: true });
         await checkAutoEscalation(client, member.guild, member.user.id, member.user.tag, "mute").catch(() => {});
         break;
       }
@@ -553,7 +553,7 @@ async function executeAction(
           modId: botId,
           modTag: botTag,
           reason,
-        });
+        }, { isAutomod: true });
         await member.kick(reason).catch(() => {});
         await checkAutoEscalation(client, member.guild, member.user.id, member.user.tag, "kick").catch(() => {});
         break;
@@ -569,7 +569,7 @@ async function executeAction(
           modTag: botTag,
           reason,
           duration: action.duration,
-        });
+        }, { isAutomod: true });
         await member.guild.members.ban(member.user.id, {
           reason,
           deleteMessageSeconds: 604_800,

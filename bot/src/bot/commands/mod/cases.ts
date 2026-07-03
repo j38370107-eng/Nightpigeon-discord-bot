@@ -36,7 +36,15 @@ function caseEmbed(rec: CaseRecord, guildName?: string): EmbedBuilder {
     `**Reason** — ${rec.reason}`,
   ];
   if (rec.duration) lines.push(`**Duration** — ${rec.duration}`);
-  if (rec.expiresAt) lines.push(`**Expires** — <t:${Math.floor(rec.expiresAt / 1000)}:F>`);
+
+  const isExpired = !!rec.expiresAt && rec.expiresAt <= Date.now();
+  if (rec.expiresAt) {
+    lines.push(
+      isExpired
+        ? `**Expired** — <t:${Math.floor(rec.expiresAt / 1000)}:R>`
+        : `**Expires** — <t:${Math.floor(rec.expiresAt / 1000)}:F>`
+    );
+  }
   lines.push(`**Created** — <t:${Math.floor(rec.createdAt / 1000)}:R>`);
 
   if (rec.deleted) {
@@ -50,8 +58,8 @@ function caseEmbed(rec: CaseRecord, guildName?: string): EmbedBuilder {
   }
 
   return new EmbedBuilder()
-    .setColor(colorFor(rec.action))
-    .setTitle(`Case #${rec.id}${guildName ? ` · ${guildName}` : ""}`)
+    .setColor(isExpired ? 0x99aab5 : colorFor(rec.action))
+    .setTitle(`Case #${rec.id}${guildName ? ` · ${guildName}` : ""}${isExpired ? " — ⏳ Expired" : ""}`)
     .setDescription(lines.join("\n"));
 }
 

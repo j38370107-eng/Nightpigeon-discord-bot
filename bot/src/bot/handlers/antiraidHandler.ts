@@ -445,7 +445,7 @@ export async function activateRaidMode(
           modId: client.user?.id ?? "bot",
           modTag: client.user?.tag ?? "Bot",
           reason: "Automated raid response",
-        }).catch(() => {});
+        }, { isAutomod: true }).catch(() => {});
       }
     }
 

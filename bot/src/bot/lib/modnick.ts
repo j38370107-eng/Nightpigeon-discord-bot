@@ -46,6 +46,8 @@ export interface ModnickBadWordsRule {
   custom_words?: string[];
   normalize_map?: Record<string, string>;
   whole_word_only?: boolean;
+  /** Match words with exact casing instead of case-insensitively. Defaults to false. */
+  case_sensitive?: boolean;
 }
 
 export interface ModnickImpersonationRule {
@@ -74,6 +76,8 @@ export interface ModnickTooLongRule {
 export interface ModnickCustomPatternsRule {
   enabled?: boolean;
   patterns?: string[];
+  /** Evaluate regex patterns with exact casing instead of case-insensitively. Defaults to false. */
+  case_sensitive?: boolean;
 }
 
 export interface ModnickRules {
@@ -200,8 +204,8 @@ function similarity(a: string, b: string): number {
   return (longer.length - levenshtein(longer, shorter)) / longer.length;
 }
 
-function normalizeWithMap(nick: string, map: Record<string, string>): string {
-  let out = nick.toLowerCase();
+function normalizeWithMap(nick: string, map: Record<string, string>, caseSensitive = false): string {
+  let out = caseSensitive ? nick : nick.toLowerCase();
   for (const [from, to] of Object.entries(map)) {
     out = out.split(from).join(to);
   }
@@ -294,22 +298,24 @@ function checkZalgo(nick: string, rule?: ModnickZalgoRule): string | null {
 
 function checkBadWords(nick: string, rule?: ModnickBadWordsRule, cfg?: GuildConfig): string | null {
   if (!rule?.enabled) return null;
+  const caseSensitive = rule.case_sensitive ?? false;
   const map = rule.normalize_map ?? DEFAULT_NORMALIZE_MAP;
-  const normalized = normalizeWithMap(nick, map);
+  const normalized = normalizeWithMap(nick, map, caseSensitive);
   const words: string[] = [...(rule.custom_words ?? [])];
   if (rule.use_automod_wordlist !== false && cfg) words.push(...getAutomodWords(cfg));
   const wholeWord = rule.whole_word_only ?? false;
+  const regexFlags = caseSensitive ? "" : "i";
   for (const word of words) {
     if (!word) continue;
-    const lw = word.toLowerCase();
+    const w = caseSensitive ? word : word.toLowerCase();
     if (wholeWord) {
       try {
-        if (new RegExp(`(?<![a-z0-9])${escapeRegex(lw)}(?![a-z0-9])`, "i").test(normalized)) return "bad_words";
+        if (new RegExp(`(?<![a-zA-Z0-9])${escapeRegex(w)}(?![a-zA-Z0-9])`, regexFlags).test(normalized)) return "bad_words";
       } catch {
-        if (normalized.includes(lw)) return "bad_words";
+        if (normalized.includes(w)) return "bad_words";
       }
     } else {
-      if (normalized.includes(lw)) return "bad_words";
+      if (normalized.includes(w)) return "bad_words";
     }
   }
   return null;
@@ -369,9 +375,10 @@ function checkTooLong(nick: string, rule?: ModnickTooLongRule): string | null {
 
 function checkCustomPatterns(nick: string, rule?: ModnickCustomPatternsRule): string | null {
   if (!rule?.enabled) return null;
+  const flags = rule.case_sensitive ? "" : "i";
   for (const pattern of (rule.patterns ?? [])) {
     try {
-      if (new RegExp(pattern, "i").test(nick)) return "custom_patterns";
+      if (new RegExp(pattern, flags).test(nick)) return "custom_patterns";
     } catch {
       logger.debug({ pattern }, "modnick: invalid custom regex pattern — skipping");
     }

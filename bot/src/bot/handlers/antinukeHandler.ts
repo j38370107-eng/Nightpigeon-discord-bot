@@ -437,7 +437,7 @@ async function trigger(
         modId: client.user?.id ?? "bot",
         modTag: client.user?.tag ?? "Bot",
         reason: `Antinuke: ${actionType} (${count}/${threshold})`,
-      }).catch(() => null);
+      }, { isAutomod: true }).catch(() => null);
       if (record) caseId = record.id;
     }
 

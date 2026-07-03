@@ -1,4 +1,5 @@
 import { dbGet, dbSet } from "../store/db";
+import { computeCaseExpiresAt } from "./caseExpirations";
 
 const COUNTER_STORE = "case_counter";
 const CASES_STORE   = "mod_cases";
@@ -38,12 +39,23 @@ async function saveCases(guildId: string, cases: CaseRecord[]): Promise<void> {
   await dbSet(CASES_STORE, guildId, cases);
 }
 
+export interface AddCaseOptions {
+  /** Set true when the case was issued automatically (automod / antiraid / antinuke), not by a human moderator. */
+  isAutomod?: boolean;
+}
+
 export async function addCase(
   guildId: string,
-  data: Omit<CaseRecord, "id" | "createdAt">
+  data: Omit<CaseRecord, "id" | "createdAt">,
+  opts: AddCaseOptions = {}
 ): Promise<CaseRecord> {
   const id = await bumpCounter(guildId);
-  const record: CaseRecord = { id, createdAt: Date.now(), ...data };
+  const createdAt = Date.now();
+  let expiresAt = data.expiresAt;
+  if (expiresAt === undefined) {
+    expiresAt = await computeCaseExpiresAt(guildId, data.action, !!opts.isAutomod, createdAt);
+  }
+  const record: CaseRecord = { id, createdAt, ...data, expiresAt };
   const cases = await loadCases(guildId);
   cases.push(record);
   await saveCases(guildId, cases);
