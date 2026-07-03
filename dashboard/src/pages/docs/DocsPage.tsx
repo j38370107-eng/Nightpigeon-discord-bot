@@ -145,6 +145,35 @@ function SchemaTable({ fields, depth = 0 }: { fields: SchemaField[]; depth?: num
   );
 }
 
+function CommandTable({ commands }: { commands: NonNullable<DocPage["commands"]> }) {
+  return (
+    <table style={{ ...tableStyle, marginBottom: 24 }}>
+      <thead>
+        <tr>
+          <th style={thStyle}>Command</th>
+          <th style={thStyle}>Description</th>
+          <th style={thStyle}>Examples</th>
+        </tr>
+      </thead>
+      <tbody>
+        {commands.map((cmd, i) => (
+          <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+            <td style={{ ...tdStyle, fontFamily: "monospace", fontSize: 12, color: "var(--accent)", minWidth: 200, verticalAlign: "top" }}>
+              {cmd.usage}
+            </td>
+            <td style={{ ...tdStyle, verticalAlign: "top" }}>{cmd.description}</td>
+            <td style={{ ...tdStyle, verticalAlign: "top" }}>
+              {cmd.examples?.map((ex, j) => (
+                <code key={j} style={{ ...inlineCodeStyle, display: "block", marginBottom: 4 }}>{ex}</code>
+              )) ?? "—"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function PageContent({ page }: { page: DocPage }) {
   return (
     <div>
@@ -164,6 +193,13 @@ function PageContent({ page }: { page: DocPage }) {
 
       {page.content && (
         <div style={{ marginBottom: 32 }}>{renderContent(page.content)}</div>
+      )}
+
+      {page.commands && page.commands.length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <SectionHeader>Commands</SectionHeader>
+          <CommandTable commands={page.commands} />
+        </section>
       )}
 
       {page.schema && page.schema.length > 0 && (
