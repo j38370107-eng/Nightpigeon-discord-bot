@@ -56,11 +56,12 @@ export const LEVEL_UNCONFIGURED = 999_999_999_999;
 
 /**
  * Returns the required level for a command from YAML config.
- * Defaults to LEVEL_UNCONFIGURED (effectively disabled) if not set.
+ * Defaults to 0 (everyone) if the command is not explicitly configured.
+ * Use levels.commands to RESTRICT access — commands are open by default.
  */
 export function getRequiredLevel(guildId: string, commandName: string): number {
   const cfg = getCachedConfig(guildId);
-  return cfg.levels.commands[commandName] ?? LEVEL_UNCONFIGURED;
+  return cfg.levels.commands[commandName] ?? 0;
 }
 
 /**

@@ -134,28 +134,21 @@ function findDmViolations(obj: unknown, path = ""): string[] {
 
 const STARTER_YAML = `prefix: "!"
 
-levels:
-  commands:
-    help: 0
-    # All other commands are disabled until you add them here.
-    # Set the minimum level needed to use each command.
-    # 0 = everyone  |  25 = trusted  |  50 = mod  |  75 = admin  |  100 = owner
-    #
-    # ── Common setup ──────────────────────────────
-    # warn: 25
-    # kick: 50
-    # ban: 50
-    # mute: 25
-    # unmute: 25
-    # purge: 25
-    # slowmode: 50
-    # case: 0
-    # cases: 0
-    # note: 25
-    # viewnotes: 25
-    # escalation: 50
-    #
-    # See the docs for the full command list and recommended levels.
+# All commands are open to everyone by default.
+# Use levels to RESTRICT who can run specific commands.
+# 0 = everyone  |  25 = trusted  |  50 = mod  |  75 = admin  |  100 = owner
+#
+# levels:
+#   roles:
+#     "YOUR_MOD_ROLE_ID": 50
+#     "YOUR_ADMIN_ROLE_ID": 75
+#   commands:
+#     warn: 25
+#     kick: 50
+#     ban: 50
+#     mute: 25
+#     purge: 25
+#     note: 25
 
 # ============================================================
 # PUNISHMENT ESCALATION

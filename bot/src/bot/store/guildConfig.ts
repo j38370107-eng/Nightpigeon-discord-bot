@@ -367,9 +367,7 @@ export const DEFAULT_CONFIG: GuildConfig = {
   levels: {
     users: {},
     roles: {},
-    commands: {
-      help: 0,
-    },
+    commands: {},
   },
   tags: {},
   plugins: {
