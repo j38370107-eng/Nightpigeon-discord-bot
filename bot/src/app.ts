@@ -29,6 +29,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get('/', (req, res) => res.sendStatus(200));
 app.get('/ping', (req, res) => res.send('OK'));
 app.use("/api", router);
 
