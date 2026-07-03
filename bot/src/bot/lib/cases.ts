@@ -14,6 +14,10 @@ export interface CaseRecord {
   createdAt: number;
   duration?: string;
   expiresAt?: number;
+  deleted?: boolean;
+  deletedAt?: number;
+  deletedBy?: string;
+  deletedByTag?: string;
 }
 
 async function getCounter(guildId: string): Promise<number> {
@@ -51,13 +55,39 @@ export async function getCase(guildId: string, caseId: number): Promise<CaseReco
   return cases.find((c) => c.id === caseId) ?? null;
 }
 
-export async function getCasesForUser(guildId: string, userId: string): Promise<CaseRecord[]> {
-  const cases = await loadCases(guildId);
-  return cases.filter((c) => c.userId === userId);
+export interface CaseFilterOptions {
+  /** Include soft-deleted cases in the result. Defaults to false. */
+  includeDeleted?: boolean;
+  /** Only return cases issued by the bot itself (automod actions). */
+  automodOnly?: boolean;
+  /** The bot's own user ID — required when automodOnly is set. */
+  botId?: string;
 }
 
-export async function getAllCases(guildId: string): Promise<CaseRecord[]> {
-  return loadCases(guildId);
+export async function getCasesForUser(
+  guildId: string,
+  userId: string,
+  opts: CaseFilterOptions = {}
+): Promise<CaseRecord[]> {
+  const cases = await loadCases(guildId);
+  return cases.filter((c) => {
+    if (c.userId !== userId) return false;
+    if (!opts.includeDeleted && c.deleted) return false;
+    if (opts.automodOnly && c.modId !== opts.botId) return false;
+    return true;
+  });
+}
+
+export async function getAllCases(
+  guildId: string,
+  opts: CaseFilterOptions = {}
+): Promise<CaseRecord[]> {
+  const cases = await loadCases(guildId);
+  return cases.filter((c) => {
+    if (!opts.includeDeleted && c.deleted) return false;
+    if (opts.automodOnly && c.modId !== opts.botId) return false;
+    return true;
+  });
 }
 
 export async function editCase(
@@ -74,11 +104,25 @@ export async function editCase(
   return true;
 }
 
-export async function deleteCase(guildId: string, caseId: number): Promise<boolean> {
+/**
+ * Soft-delete a case. The record is kept in storage (so `!case <id>` can
+ * still show it, greyed out, as "Deleted case") but it is excluded from
+ * every other listing (getCasesForUser / getAllCases) by default.
+ */
+export async function deleteCase(
+  guildId: string,
+  caseId: number,
+  deletedBy?: { id: string; tag: string }
+): Promise<boolean> {
   const cases = await loadCases(guildId);
   const idx = cases.findIndex((c) => c.id === caseId);
-  if (idx === -1) return false;
-  cases.splice(idx, 1);
+  if (idx === -1 || cases[idx]!.deleted) return false;
+  cases[idx]!.deleted = true;
+  cases[idx]!.deletedAt = Date.now();
+  if (deletedBy) {
+    cases[idx]!.deletedBy = deletedBy.id;
+    cases[idx]!.deletedByTag = deletedBy.tag;
+  }
   await saveCases(guildId, cases);
   return true;
 }

@@ -39,6 +39,16 @@ function caseEmbed(rec: CaseRecord, guildName?: string): EmbedBuilder {
   if (rec.expiresAt) lines.push(`**Expires** — <t:${Math.floor(rec.expiresAt / 1000)}:F>`);
   lines.push(`**Created** — <t:${Math.floor(rec.createdAt / 1000)}:R>`);
 
+  if (rec.deleted) {
+    if (rec.deletedAt) lines.push(`**Deleted** — <t:${Math.floor(rec.deletedAt / 1000)}:R>`);
+    if (rec.deletedByTag) lines.push(`**Deleted By** — <@${rec.deletedBy}> (${rec.deletedByTag})`);
+
+    return new EmbedBuilder()
+      .setColor(0x2b2d31)
+      .setTitle(`Case #${rec.id}${guildName ? ` · ${guildName}` : ""} — 🗑️ Deleted Case`)
+      .setDescription(lines.join("\n"));
+  }
+
   return new EmbedBuilder()
     .setColor(colorFor(rec.action))
     .setTitle(`Case #${rec.id}${guildName ? ` · ${guildName}` : ""}`)
@@ -67,30 +77,34 @@ export const caseCmd: Command = {
   },
 };
 
-// !cases [@user]
+// !cases [@user] [-automod]
 export const casesCmd: Command = {
   name: "cases",
   aliases: [],
-  usage: "[@user|user_id]",
-  description: "View all cases for a user, or all recent server cases.",
-  async execute(message: Message, args: string[], _client: Client) {
+  usage: "[@user|user_id] [-automod]",
+  description: "View all cases for a user, or all recent server cases. Use -automod to show only automod cases.",
+  async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
     if (!(await checkYamlLevelAsync(message, "cases"))) {
       return void message.reply("❌ You don't have permission to use this command.");
     }
 
+    const automodOnly = args.some((a) => a.toLowerCase() === "-automod");
+    const filteredArgs = args.filter((a) => a.toLowerCase() !== "-automod");
+    const botId = client.user?.id;
+
     let records: CaseRecord[];
     let title: string;
 
-    if (args.length > 0) {
-      const target = await resolveTarget(message, args);
+    if (filteredArgs.length > 0) {
+      const target = await resolveTarget(message, filteredArgs);
       if (!target) return void message.reply("❌ Could not find that user.");
-      records = await getCasesForUser(message.guild.id, target.user.id);
-      title = `Cases for ${target.user.tag}`;
+      records = await getCasesForUser(message.guild.id, target.user.id, { automodOnly, botId });
+      title = automodOnly ? `Automod Cases for ${target.user.tag}` : `Cases for ${target.user.tag}`;
     } else {
-      const all = await getAllCases(message.guild.id);
+      const all = await getAllCases(message.guild.id, { automodOnly, botId });
       records = all.slice(-20).reverse();
-      title = `Recent cases in ${message.guild.name}`;
+      title = automodOnly ? `Recent Automod Cases in ${message.guild.name}` : `Recent cases in ${message.guild.name}`;
     }
 
     if (records.length === 0) {
@@ -173,7 +187,7 @@ export const editcaseCmd: Command = {
   aliases: [],
   usage: "<case_id> reason <new reason> | <case_id> duration <value>",
   description: "Edit the reason or duration of an existing case.",
-  async execute(message: Message, args: string[], _client: Client) {
+  async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
     if (!(await checkYamlLevelAsync(message, "editcase"))) {
       return void message.reply("❌ You don't have permission to use this command.");
@@ -195,6 +209,9 @@ export const editcaseCmd: Command = {
       return void message.reply(`❌ Please provide a new value for **${field}**.`);
     }
 
+    const before = await getCase(message.guild.id, id);
+    if (!before) return void message.reply(`❌ Case #${id} not found.`);
+
     const ok = await editCase(message.guild.id, id, { [field]: value });
     if (!ok) return void message.reply(`❌ Case #${id} not found.`);
 
@@ -214,6 +231,24 @@ export const editcaseCmd: Command = {
           .setTimestamp(),
       ],
     });
+
+    const logAction =
+      field === "duration"
+        ? `Case Edit — Duration (${value})`
+        : `Case Edit — Reason`;
+
+    await sendModLog(client, message.guild.id, {
+      action: logAction,
+      executor: { tag: message.author.tag, id: message.author.id },
+      target: { tag: before.userTag, id: before.userId },
+      reason:
+        field === "reason"
+          ? `Reason changed from "${before.reason}" to "${value}"`
+          : `Reason: ${before.reason}`,
+      duration: field === "duration" ? value : before.duration,
+      color: 0x2ecc71,
+      caseId: String(id),
+    });
   },
 };
 
@@ -222,8 +257,8 @@ export const deletecaseCmd: Command = {
   name: "deletecase",
   aliases: [],
   usage: "<case_id>",
-  description: "Permanently delete a case.",
-  async execute(message: Message, args: string[], _client: Client) {
+  description: "Delete a case. It is removed from all lists and counts, but !case <id> will still show it, greyed out.",
+  async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
     if (!(await checkYamlLevelAsync(message, "deletecase"))) {
       return void message.reply("❌ You don't have permission to use this command.");
@@ -232,9 +267,24 @@ export const deletecaseCmd: Command = {
     const id = parseInt(args[0] ?? "", 10);
     if (isNaN(id) || id < 1) return void message.reply("❌ Please provide a valid case ID.");
 
-    const ok = await deleteCase(message.guild.id, id);
-    if (!ok) return void message.reply(`❌ Case #${id} not found.`);
+    const before = await getCase(message.guild.id, id);
+    if (!before) return void message.reply(`❌ Case #${id} not found.`);
 
-    await message.reply(`🗑️ Case #${id} has been deleted.`);
+    const ok = await deleteCase(message.guild.id, id, {
+      id: message.author.id,
+      tag: message.author.tag,
+    });
+    if (!ok) return void message.reply(`❌ Case #${id} not found or already deleted.`);
+
+    await message.reply(`🗑️ Case #${id} has been deleted. It will no longer appear in lists or counts, but \`!case ${id}\` will still show it as a deleted case.`);
+
+    await sendModLog(client, message.guild.id, {
+      action: "Case Delete",
+      executor: { tag: message.author.tag, id: message.author.id },
+      target: { tag: before.userTag, id: before.userId },
+      reason: `Case #${id} (${before.action}) deleted — original reason: ${before.reason}`,
+      color: 0xe74c3c,
+      caseId: String(id),
+    });
   },
 };
