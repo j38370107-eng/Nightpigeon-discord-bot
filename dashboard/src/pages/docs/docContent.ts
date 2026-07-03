@@ -622,11 +622,11 @@ levels:
 ### Cases
 | Command | Recommended level | Notes |
 |---------|------------------|-------|
-| \`case\` | 0 | View a specific case |
-| \`cases\` | 0 | View cases for a user |
+| \`case\` | 0 | View a specific case (shows deleted cases too, greyed out) |
+| \`cases\` | 0 | View cases for a user — add \`-automod\` to show only automod cases |
 | \`addcase\` | 50 | Manually create a case |
-| \`editcase\` | 50 | Edit a case reason or duration |
-| \`deletecase\` | 75 | Delete a case |
+| \`editcase\` | 50 | Edit a case reason or duration — logs the change to the mod log |
+| \`deletecase\` | 75 | Soft-delete a case (removed from lists/counts, still viewable via \`!case\`) |
 | \`servercases\` | 25 | View all server cases |
 | \`casecount\` | 0 | Count cases for a user |
 | \`exportcases\` | 75 | Export all cases |
@@ -2168,7 +2168,35 @@ warn:
 ## Notes vs. Cases
 
 - **Cases** are created automatically by moderation commands and may notify the user
-- **Notes** are staff-only records added manually with \`!note\` — users are never notified`,
+- **Notes** are staff-only records added manually with \`!note\` — users are never notified
+
+## Editing a case — \`!editcase\`
+
+\`!editcase <case_id> reason <new reason>\` and \`!editcase <case_id> duration <value>\` update an existing case in place.
+
+- Every edit — whether it changes the **reason** or the **duration** — is posted to the mod log channel automatically, so there's always an audit trail of who changed what and when.
+- When a duration is updated, the mod log entry shows the new duration directly in the action name, e.g. **Case Edit — Duration (7d)**, so it's obvious at a glance what changed without opening the case.
+- Reason edits log the before/after text so moderators can see exactly what was changed.
+
+## Deleting a case — \`!deletecase\`
+
+\`!deletecase <case_id>\` **soft-deletes** a case rather than erasing it:
+
+- The case is immediately removed from \`!cases\`, \`!servercases\`, \`!casecount\`, \`!exportcases\`, and from escalation/punishment counts — it behaves as if it never existed anywhere else in the bot.
+- The underlying record is kept in storage. Running \`!case <case_id>\` on a deleted case still shows the full embed — but greyed out and labeled **🗑️ Deleted Case**, including who deleted it and when.
+- Deleting a case posts a **Case Delete** entry to the mod log channel with the original reason and action for reference.
+
+## Filtering automod cases — \`-automod\`
+
+Add the \`-automod\` flag to \`!cases\` to show only cases that were created automatically by automod rules (as opposed to cases created by a human moderator command):
+
+| Command | Result |
+|---------|--------|
+| \`!cases @user\` | All cases (manual + automod) for that user |
+| \`!cases @user -automod\` | Only automod-issued cases for that user |
+| \`!cases -automod\` | Recent automod-issued cases across the whole server |
+
+Automod cases are identified by the moderator on the case being the bot itself, so this works for any automod rule action (warn, mute, kick, ban) without needing extra configuration.`,
       },
 
       // ── AUTOMOD ─────────────────────────────────────────────────────────────
