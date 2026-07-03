@@ -122,7 +122,6 @@ export async function startBot(): Promise<Client | null> {
       GatewayIntentBits.GuildInvites,
       GatewayIntentBits.GuildEmojisAndStickers,
       GatewayIntentBits.GuildWebhooks,
-      GatewayIntentBits.GuildPresences,
       GatewayIntentBits.GuildScheduledEvents,
       GatewayIntentBits.AutoModerationConfiguration,
       GatewayIntentBits.AutoModerationExecution,

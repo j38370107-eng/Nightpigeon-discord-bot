@@ -25,6 +25,10 @@ const server = app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
 });
 
+process.on("unhandledRejection", (reason) => {
+  logger.error({ reason }, "Unhandled promise rejection");
+});
+
 initBotStores()
   .catch((err) => logger.error({ err }, "Failed to initialise bot stores"))
   .then(() => startBot())
@@ -48,5 +52,13 @@ initBotStores()
     process.on("SIGINT", () => shutdown("SIGINT"));
   })
   .catch((err) => {
-    logger.error({ err }, "Bot startup failed");
+    const msg = err?.message ?? String(err);
+    if (msg.includes("disallowed intents") || msg.includes("4014")) {
+      logger.error("Discord login failed: privileged intents are not enabled in the Discord Developer Portal. Enable Server Members Intent, Message Content Intent under your app's Bot settings.");
+    } else if (msg.includes("TOKEN_INVALID") || msg.includes("Invalid token")) {
+      logger.error("Discord login failed: the DISCORD_BOT_TOKEN is invalid or revoked. Reset it in the Discord Developer Portal.");
+    } else {
+      logger.error({ err }, "Discord login failed");
+    }
+    process.exit(1);
   });
