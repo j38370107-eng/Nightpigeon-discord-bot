@@ -138,6 +138,7 @@ const helpCmd: Command = {
   aliases: [],
   usage: "[command]",
   description: "List commands or get details on one command.",
+  public: true,
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
 

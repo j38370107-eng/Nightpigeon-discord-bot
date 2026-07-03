@@ -270,7 +270,7 @@ export async function handleMessage(client: Client, message: Message): Promise<v
   const cmd = resolveCommand(guildId, rawName);
 
   if (cmd) {
-    const required = getRequiredLevel(guildId, cmd.name);
+    const required = cmd.public ? 0 : getRequiredLevel(guildId, cmd.name);
     if (required >= LEVEL_UNCONFIGURED) {
       await message.reply(
         `⚙️ That command isn't enabled yet. Use \`${prefix}help\` to see what's available, or visit the dashboard to configure more commands: <${BOT_WEBSITE}>`
