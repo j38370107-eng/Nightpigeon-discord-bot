@@ -664,6 +664,8 @@ levels:
 | \`unwatch\` | 25 | Remove from watch list |
 | \`watchlist\` | 25 | View the watch list |
 
+While a user is on the watch list, **every message they send is automatically forwarded** to your logging channel via the \`watched_user_message\` server-log event (see [Logging](#plugin-logging)) — including the message content, channel, any attachments, the watch reason, and a jump link. This happens automatically as soon as \`!watch\` is used; no extra config is required beyond having a logging channel set up. Run \`!unwatch\` to stop the forwarding.
+
 ### Role ban
 | Command | Recommended level | Notes |
 |---------|------------------|-------|
@@ -3492,6 +3494,7 @@ logging:
 | Event key | Default | What it logs |
 |-----------|---------|-------------|
 | \`message_pinned\` | ❌ | Pin event, channel, who pinned it |
+| \`watched_user_message\` | ✅ | Every message sent by a user on the \`!watchlist\` — user, channel, content, attachments, watch reason, jump link. Only fires for users currently on the watch list; see [Watch List](#plugin-moderation). |
 
 ### Roles
 | Event key | Default | What it logs |

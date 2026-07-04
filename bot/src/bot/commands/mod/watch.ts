@@ -3,6 +3,7 @@ import type { Command } from "../types";
 import { resolveTarget, getArgs } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
 import { dbGet, dbSet } from "../../store/db";
+import { sendYamlLogCached } from "../../lib/yamlLogging";
 
 const STORE = "watchlist";
 
@@ -120,5 +121,37 @@ export const watchlistCmd: Command = {
     });
   },
 };
+
+/**
+ * If the author of this message is on the guild's watchlist, forward the
+ * message (content + attachments) to the configured logging channel via the
+ * "watched_user_message" server-log event. Silently does nothing if the
+ * user isn't watched or logging isn't configured for that event.
+ */
+export async function logWatchedUserMessage(client: Client, message: Message): Promise<void> {
+  if (!message.guild) return;
+
+  const list = await loadWatchlist(message.guild.id);
+  const entry = list[message.author.id];
+  if (!entry) return;
+
+  const channelName =
+    "name" in message.channel ? (message.channel as any).name : "unknown";
+
+  const attachmentUrls = message.attachments.map((a) => a.url).join("\n") || undefined;
+
+  await sendYamlLogCached(client, message.guild.id, {
+    eventKey: "watched_user_message",
+    category: "server",
+    vars: {
+      user: `${message.author.tag} (${message.author.id})`,
+      channel: `#${channelName}`,
+      content: message.content || "*(no text content)*",
+      attachments: attachmentUrls,
+      watch_reason: entry.reason,
+      jump_url: message.url,
+    },
+  });
+}
 
 export { loadWatchlist };

@@ -31,7 +31,7 @@ import { noteCmd, viewnotesCmd, deletenoteCmd } from "../commands/mod/note";
 import { forcenoteCmd, viewnoteCmd, notesearchCmd, editnoteCmd } from "../commands/mod/noteext";
 import { nickCmd, resetnickCmd, locknickCmd, unlocknickCmd } from "../commands/mod/nick";
 import modnickCmd from "../commands/mod/modnick";
-import { watchCmd, unwatchCmd, watchlistCmd } from "../commands/mod/watch";
+import { watchCmd, unwatchCmd, watchlistCmd, logWatchedUserMessage } from "../commands/mod/watch";
 import { rolebanCmd, unrolebanCmd, rolebannedCmd } from "../commands/mod/roleban";
 import { lockCmd, unlockCmd, hideCmd, unhideCmd } from "../commands/mod/lock";
 import { seenCmd, cleanupCmd } from "../commands/mod/cleanup";
@@ -220,6 +220,11 @@ export async function handleMessage(client: Client, message: Message): Promise<v
     message.channel.id,
     "name" in message.channel ? (message.channel as any).name : "unknown"
   ).catch(() => {});
+
+  // Watchlist: forward messages from watched users to the logging channel
+  logWatchedUserMessage(client, message).catch((err) =>
+    logger.warn({ err, guildId }, "Watchlist message log error")
+  );
 
   // Automod
   const blocked = await runAutomod(client, message).catch((err) => {
