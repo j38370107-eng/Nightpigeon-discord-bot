@@ -1432,6 +1432,10 @@ Automod rules can fire far more often than a human moderator would warn someone,
   # DM the user when their mute duration is updated or approaching expiry
   dm_mute_updates: false
 
+  # Days (0-7) of message history Discord deletes when a ban is issued.
+  # Applies to !ban, !tempban, and !forceban. 0 = keep all messages.
+  ban_day_delete: 0
+
   # ── Channel response messages ──────────────────────────────────────────
   # Placeholders available on all messages:
   #   {user}          username#discriminator of the target
@@ -1492,40 +1496,40 @@ Automod rules can fire far more often than a human moderator would warn someone,
 
     unmute_success: "🔊 **{user}** has been unmuted | Case: #{case_id}"
     warn_success: "⚠️ **{user}** has been warned | Case: #{case_id}"
+
+    # Optional overrides — fall back to the base *_success/*_dm message above
+    # when omitted. Used automatically by the timed/soft variants.
+    tempban_success: "🔨 **{user}** has been temp-banned | Expires: {expires_at} | Case: #{case_id}"
+    softban_success: "🔨 **{user}** has been softbanned (messages cleared) | Case: #{case_id}"
+    tempmute_dm: "You have been **temporarily muted** in **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
+    tempban_dm: "You have been **temporarily banned** from **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
+    softban_dm: "You have been **softbanned** from **{server}** (your recent messages were cleared).\n**Reason:** {reason}"
+
     purge_success: "🗑️ {count} messages deleted"
     slowmode_success: "🐢 Slowmode set to {count}s in {channel.mention}"
     slowmode_off: "✅ Slowmode removed in {channel.mention}"
+
+    # Lock/unlock: *_success posts in the channel the command was run from;
+    # *_channel_notice posts in the target channel when it differs from that
+    # (e.g. running !lock #general from a mod-only channel).
     lock_success: "🔒 {channel.mention} has been locked | {reason}"
+    lock_channel_notice: "🔒 This channel has been locked. **Reason:** {reason}"
     unlock_success: "🔓 {channel.mention} has been unlocked"
-    hide_success: "👁️ {channel.mention} hidden"
-    unhide_success: "👁️ {channel.mention} visible again"
-    nick_success: "📝 Nickname set for **{user}**"
-    resetnick_success: "📝 Nickname reset for **{user}**"
-    locknick_success: "🔒 Nickname locked for **{user}**"
-    unlocknick_success: "🔓 Nickname unlocked for **{user}**"
-    watch_success: "👁️ **{user}** added to watch list"
-    unwatch_success: "✅ **{user}** removed from watch list"
-    roleban_success: "🚫 **{user}** role-banned from {trigger}"
-    unroleban_success: "✅ Role-ban removed for **{user}**"
+    unlock_channel_notice: "🔓 This channel has been unlocked."
 
     # ── DM messages sent directly to the actioned user ──────────────────
     ban_dm: "You have been **banned** from **{server}**.\n**Reason:** {reason}\n**Duration:** {duration}"
-    tempban_dm: "You have been **temporarily banned** from **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
     unban_dm: "You have been **unbanned** from **{server}**."
     kick_dm: "You have been **kicked** from **{server}**.\n**Reason:** {reason}"
-    softban_dm: "You have been **softbanned** from **{server}** (your recent messages were cleared).\n**Reason:** {reason}"
     mute_dm: "You have been **muted** in **{server}**.\n**Reason:** {reason}\n**Duration:** {duration}\n**Expires:** {expires_at}"
-    tempmute_dm: "You have been **temporarily muted** in **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
     unmute_dm: "You have been **unmuted** in **{server}**."
     warn_dm: "You have received a **warning** in **{server}**.\n**Reason:** {reason}\n**Total warnings:** {count}"
 
     # ── Error messages ───────────────────────────────────────────────────
-    error_no_permission: "❌ You do not have permission to use this command."
-    error_user_not_found: "❌ User not found."
-    error_already_muted: "❌ **{user}** is already muted."
-    error_not_muted: "❌ **{user}** is not currently muted."
-    error_cannot_action_self: "❌ You cannot perform this action on yourself."
-    error_cannot_action_bot: "❌ You cannot perform this action on the bot."
+    # Only error_hierarchy is currently YAML-configurable (used by !modnick
+    # and mass-action commands when a target outranks the moderator).
+    # Every other error/permission message below is a fixed, non-customizable
+    # bot reply (e.g. "❌ You don't have permission to use this command.").
     error_hierarchy: "❌ You cannot action a member with an equal or higher level."
 
 # ── Moderation logging ─────────────────────────────────────────────────
@@ -1701,23 +1705,20 @@ logging:
               { key: "purge_success", type: "message", description: "Purge result. Var: {count} = messages deleted" },
               { key: "slowmode_success", type: "message", description: "Slowmode set. Vars: {count} {channel} {channel.mention}" },
               { key: "slowmode_off", type: "message", description: "Slowmode disabled." },
-              { key: "lock_success / unlock_success", type: "message", description: "Channel lock/unlock confirmed." },
-              { key: "hide_success / unhide_success", type: "message", description: "Channel visibility changed." },
-              { key: "nick_success / resetnick_success", type: "message", description: "Nickname changed or reset." },
+              { key: "lock_success", type: "message", description: "Posted in the channel the !lock command was run from." },
+              { key: "lock_channel_notice", type: "message", description: "Posted in the target channel itself when it's different from where !lock was run. Falls back to lock_success if unset." },
+              { key: "unlock_success", type: "message", description: "Posted in the channel the !unlock command was run from." },
+              { key: "unlock_channel_notice", type: "message", description: "Posted in the target channel itself. Falls back to unlock_success if unset." },
               { key: "ban_dm", type: "message", description: "DM to banned user. Vars: {server} {reason} {duration}" },
-              { key: "tempban_dm", type: "message", description: "DM to tempbanned user." },
+              { key: "tempban_dm", type: "message", description: "DM to tempbanned user. Falls back to ban_dm if unset." },
               { key: "unban_dm", type: "message", description: "DM to unbanned user." },
               { key: "kick_dm", type: "message", description: "DM to kicked user." },
-              { key: "softban_dm", type: "message", description: "DM to softbanned user." },
+              { key: "softban_dm", type: "message", description: "DM to softbanned user. Falls back to ban_dm if unset." },
               { key: "mute_dm", type: "message", description: "DM to muted user." },
+              { key: "tempmute_dm", type: "message", description: "DM to temp-muted user. Falls back to mute_dm if unset." },
               { key: "unmute_dm", type: "message", description: "DM to unmuted user." },
               { key: "warn_dm", type: "message", description: "DM to warned user. Var: {count} = warn count" },
-              { key: "error_no_permission", type: "message", description: "Missing permission response" },
-              { key: "error_user_not_found", type: "message", description: "Target user not found" },
-              { key: "error_already_muted", type: "message", description: "Target already muted" },
-              { key: "error_not_muted", type: "message", description: "Target not muted" },
-              { key: "error_cannot_action_self", type: "message", description: "Self-action attempt" },
-              { key: "error_hierarchy", type: "message", description: "Target has equal or higher level" },
+              { key: "error_hierarchy", type: "message", description: "Shown when a moderator tries to action a member with an equal or higher permission level. This is the only error message currently customizable via YAML — used by !modnick and mass-action commands." },
             ],
           },
           { key: "logging.config.moderation.events", type: "object", description: "Map each mod action to a named channel defined in logging.config.channels" },
@@ -1767,6 +1768,29 @@ Every action has a \`force\` variant that accepts a raw user ID instead of a men
 | \`!purge between <id> <id>\` | Messages between two IDs |
 | \`!purge embeds 20\` | Messages with embeds |
 | \`!purge pins\` | Pinned messages |
+
+---
+
+## Customizable vs. fixed messages
+
+Not every moderation command reads from \`moderation.messages\`. Commands are split into two groups:
+
+**YAML-customizable** (edit the text/embed via \`moderation.messages\`):
+\`warn\`, \`ban\` / \`tempban\` / \`softban\` / \`forceban\`, \`unban\`, \`kick\`, \`mute\` / \`tempmute\` / \`forcemute\`, \`unmute\` / \`forceunmute\`, \`purge\`, \`slowmode\`, \`lock\` / \`unlock\`.
+
+**Fixed bot replies** (not YAML-configurable — always send a built-in message):
+\`nick\`, \`resetnick\`, \`locknick\`, \`unlocknick\`, \`hide\`, \`unhide\`, \`watch\`, \`unwatch\`, \`watchlist\`, \`roleban\`, \`unroleban\`, \`rolebanned\`, \`seen\`, \`cleanup\`, all \`case\`/\`note\` commands. These always reply with their default wording; only their permission level is configurable (see [Permissions](#permissions)).
+
+---
+
+## Seen & cleanup
+
+Two lightweight utility commands ship alongside moderation:
+
+| Command | What it does |
+|---------|-------------|
+| \`!seen @user\` | Shows when a user last sent a message and in which channel, tracked automatically on every message. |
+| \`!cleanup @user [count]\` | Deletes recent messages from a specific user in the current channel. |
 
 ---
 
@@ -1846,6 +1870,8 @@ Timed mutes and timed bans are tracked in the database. A background task checks
 !unlock [#channel]
 !hide [#channel]
 !unhide [#channel]
+!seen <@user>
+!cleanup <@user> [count]
 \`\`\``,
       },
 
