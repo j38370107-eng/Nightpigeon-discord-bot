@@ -135,6 +135,10 @@ export async function logWatchedUserMessage(client: Client, message: Message): P
   const entry = list[message.author.id];
   if (!entry) return;
 
+  // In-channel flag: react with 🚩 so staff scrolling the channel can
+  // instantly spot messages from a watched user without checking the log.
+  message.react("🚩").catch(() => {});
+
   const channelName =
     "name" in message.channel ? (message.channel as any).name : "unknown";
 

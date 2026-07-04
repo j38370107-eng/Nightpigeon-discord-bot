@@ -664,7 +664,11 @@ levels:
 | \`unwatch\` | 25 | Remove from watch list |
 | \`watchlist\` | 25 | View the watch list |
 
-While a user is on the watch list, **every message they send is automatically forwarded** to your logging channel via the \`watched_user_message\` server-log event (see [Logging](#plugin-logging)) — including the message content, channel, any attachments, the watch reason, and a jump link. This happens automatically as soon as \`!watch\` is used; no extra config is required beyond having a logging channel set up. Run \`!unwatch\` to stop the forwarding.
+While a user is on the watch list, every message they send is automatically:
+- **Flagged in-channel** — the bot reacts with 🚩 directly on the message, so staff scrolling the channel can spot it instantly without checking the log.
+- **Forwarded to your logging channel** via the \`watched_user_message\` server-log event (see [Logging](#plugin-logging)) — including the message content, channel, any attachments, the watch reason, and a jump link.
+
+This happens automatically as soon as \`!watch\` is used; no extra config is required beyond having a logging channel set up (the 🚩 reaction works even without logging configured). Run \`!unwatch\` to stop both.
 
 ### Role ban
 | Command | Recommended level | Notes |
