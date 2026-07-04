@@ -1805,7 +1805,48 @@ If \`spam\` is a configured preset, the full text is substituted automatically. 
 
 ## Background tasks
 
-Timed mutes and timed bans are tracked in the database. A background task checks every 30 seconds and unmutes/unbans users when their time expires.`,
+Timed mutes and timed bans are tracked in the database. A background task checks every 30 seconds and unmutes/unbans users when their time expires.
+
+---
+
+### Full Command Reference
+
+\`\`\`
+!warn <@user> [reason]
+!forcewarn <user_id> [reason]
+!kick <@user> [reason]
+!ban <@user> [duration] [reason]
+!forceban <user_id> [reason]
+!unban <user_id> [reason]
+!tempban <@user> <duration> [reason]
+!softban <@user> [reason]
+!baninfo <user_id>
+!banlist
+!mute <@user> [duration] [reason]
+!forcemute <user_id> [duration] [reason]
+!unmute <@user> [reason]
+!forceunmute <user_id> [reason]
+!tempmute <@user> <duration> [reason]
+!mutelist
+!muteinfo <@user>
+!purge <count | bots | images | links | contains <text> | before/after/between <id(s)> | embeds | pins>
+!slowmode <seconds>
+!slowmodeinfo
+!nick <@user> <new_nickname>
+!resetnick <@user>
+!locknick <@user>
+!unlocknick <@user>
+!watch <@user> [reason]
+!unwatch <@user>
+!watchlist
+!roleban <@user> <@role> [reason]
+!unroleban <@user> <@role>
+!rolebanned <@role>
+!lockdown [#channel | preset_name]
+!unlock [#channel]
+!hide [#channel]
+!unhide [#channel]
+\`\`\``,
       },
 
       // ── MASS ACTIONS ────────────────────────────────────────────────────────
