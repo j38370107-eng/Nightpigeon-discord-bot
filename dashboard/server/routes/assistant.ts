@@ -307,7 +307,7 @@ levels:
     massunban: 75
 
     # ── Raid ────────────────────────────────────────────────
-    raidmode: 75     cleanup: 25       seen: 0
+    raidmode: 75     seen: 0
 
     # ── Level management ────────────────────────────────────
     level: 100       levels: 100

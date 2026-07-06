@@ -476,7 +476,6 @@ These variables are available in every message field (content, title, descriptio
 | `unmute_success` | Member unmuted | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
 | `warn_success` | Member warned | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
 | `purge_success` | Messages purged | `{count}` |
-| `cleanup_success` | User messages cleaned | `{user}`, `{count}`, `{mod}` |
 | `slowmode_success` | Slowmode set | `{count}`, `{channel}`, `{mod}` |
 | `slowmode_off` | Slowmode removed | `{channel}`, `{mod}` |
 | `lock_success` | Channel locked (mod reply) | `{channel}`, `{reason}`, `{mod}` |
@@ -571,10 +570,8 @@ Every error message is customizable. All support plain string or embed format.
 | **Warn** | |
 | `err_cannot_warn_self` | Mod tries to warn themselves |
 | `err_cannot_warn_bot` | Mod tries to warn a bot |
-| **Purge / Cleanup** | |
+| **Purge** | |
 | `err_purge_invalid` | Amount is out of range |
-| `err_cleanup_invalid` | Amount is out of range |
-| `err_cleanup_no_messages` | No recent messages found in the channel |
 | **Slowmode** | |
 | `err_slowmode_usage` | No arguments provided to slowmode command |
 | `err_slowmode_invalid` | Duration string cannot be parsed for slowmode |

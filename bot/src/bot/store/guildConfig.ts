@@ -394,7 +394,6 @@ export const DEFAULT_CONFIG: GuildConfig = {
         unmute_success:          "🔊 **{user}** has been unmuted | Case: #{case_id}",
         warn_success:            "⚠️ **{user}** has been warned | Case: #{case_id}",
         purge_success:           "🗑️ {count} messages deleted",
-        cleanup_success:         "🗑️ Deleted **{count}** messages from **{user}**.",
         slowmode_success:        "⏱️ Slowmode set to **{count}s** in {channel}.",
         slowmode_off:            "✅ Slowmode removed in {channel}.",
         lock_success:            "🔒 {channel} has been locked. **Reason:** {reason}",
@@ -460,10 +459,8 @@ export const DEFAULT_CONFIG: GuildConfig = {
         // Warn
         err_cannot_warn_self:     "❌ You cannot warn yourself.",
         err_cannot_warn_bot:      "❌ You cannot warn a bot.",
-        // Purge / Cleanup
+        // Purge
         err_purge_invalid:        "❌ Please provide a number between 1 and 100.",
-        err_cleanup_invalid:      "❌ Please provide a number between 1 and 100.",
-        err_cleanup_no_messages:  "❌ No recent messages found for that user (messages may be older than 14 days).",
         // Slowmode
         err_slowmode_usage:       "❌ Usage: `slowmode <time|+time|-time|off> [#channel]`\nExamples: `slowmode 5m`, `slowmode 30s`, `slowmode 2h`, `slowmode +5`, `slowmode -10`, `slowmode off`",
         err_slowmode_invalid:     "❌ Invalid duration. Use a number with `s`, `m`, or `h` (e.g. `5m`), a relative change like `+5` or `-5`, or `off`.",

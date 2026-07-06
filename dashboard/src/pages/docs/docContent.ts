@@ -507,9 +507,8 @@ levels:
     massremoverole:   75
     masstemprole:     75
 
-    # ── Raid / Cleanup ──────────────────────────────
+    # ── Raid ────────────────────────────────────────
     raidmode:         75
-    cleanup:          25
     seen:             0
 
     # ── Reaction roles ──────────────────────────────
@@ -701,11 +700,10 @@ This happens automatically as soon as \`!watch\` is used; no extra config is req
 | \`massremoverole\` | 75 | Remove a role from multiple members |
 | \`masstemprole\` | 75 | Give a timed role to multiple members |
 
-### Raid / cleanup
+### Raid
 | Command | Recommended level | Notes |
 |---------|------------------|-------|
 | \`raidmode\` | 75 | Toggle server raid mode |
-| \`cleanup\` | 25 | Delete messages by user |
 | \`seen\` | 0 | Check when a user was last active |
 
 ### Reaction roles
@@ -1925,14 +1923,9 @@ Every reply the bot sends from a moderation command is customizable via \`modera
 
 ---
 
-## Seen & cleanup
+## Seen
 
-Two lightweight utility commands ship alongside moderation:
-
-| Command | What it does |
-|---------|-------------|
-| \`!seen @user\` | Shows when a user last sent a message and in which channel, tracked automatically on every message. |
-| \`!cleanup @user [count]\` | Deletes recent messages from a specific user in the current channel. |
+\`!seen @user\` — shows when a user last sent a message and in which channel, tracked automatically on every message.
 
 ---
 
@@ -2013,7 +2006,6 @@ Timed mutes and timed bans are tracked in the database. A background task checks
 !hide [#channel]
 !unhide [#channel]
 !seen <@user>
-!cleanup <@user> [count]
 \`\`\``,
       },
 

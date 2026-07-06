@@ -17,7 +17,7 @@ const BUILTIN_COMMANDS = new Set([
   "addcase","addrole","ar","autoclean","automod-escalation","autoreaction",
   "autoreply","av","avatar","ban","baninfo","banlist","banner","botinfo",
   "botstats","case","casecount","cases","casesearch","cc","channelinfo",
-  "charcount","ci","cleanup","deletecase","deletenote","delreminder","editcase",
+  "charcount","ci","deletecase","deletenote","delreminder","editcase",
   "editnote","embed","escalation","exportcases","firstmsg","forceban",
   "forcemute","forcenote","forceunmute","forcewarn","goodbye","guildinfo",
   "help","hide","inrole","inviteinfo","inviteleaderboard","invitereset",

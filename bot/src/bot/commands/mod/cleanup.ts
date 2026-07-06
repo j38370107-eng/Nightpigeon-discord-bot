@@ -1,6 +1,6 @@
-import { Client, EmbedBuilder, Message, TextChannel } from "discord.js";
+import { Client, EmbedBuilder, Message } from "discord.js";
 import type { Command } from "../types";
-import { resolveTarget, getArgs } from "../../lib/resolveUser";
+import { resolveTarget } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
 import { getCachedConfig } from "../../store/guildConfig";
 import { buildPayload } from "../../lib/msgTemplate";
@@ -65,64 +65,3 @@ export const seenCmd: Command = {
   },
 };
 
-// !cleanup @user <amount> — delete messages from a specific user in the current channel
-export const cleanupCmd: Command = {
-  name: "cleanup",
-  aliases: [],
-  usage: "@user <amount>",
-  description: "Delete up to 100 messages from a specific user in the current channel.",
-  async execute(message: Message, args: string[], _client: Client) {
-    if (!message.guild) return;
-
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
-
-    if (!(await checkYamlLevelAsync(message, "cleanup"))) {
-      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
-    }
-
-    const target = await resolveTarget(message, args);
-    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
-
-    const amountStr = getArgs(message, args)[0];
-    const amount = parseInt(amountStr ?? "0", 10);
-    if (isNaN(amount) || amount < 1 || amount > 100) {
-      return void message.reply(buildPayload(msgs.err_cleanup_invalid, {}, "❌ Please provide a number between 1 and 100."));
-    }
-
-    const channel = message.channel as TextChannel;
-    await message.delete().catch(() => {});
-
-    const fetched = await channel.messages.fetch({ limit: 100 });
-    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-    const toDelete = [...fetched.values()]
-      .filter((m) => m.author.id === target.user.id && m.createdTimestamp > cutoff)
-      .slice(0, amount);
-
-    if (toDelete.length === 0) {
-      const n = await channel.send(buildPayload(msgs.err_cleanup_no_messages, {}, "❌ No recent messages found for that user (messages may be older than 14 days)."));
-      setTimeout(() => n.delete().catch(() => {}), 5000);
-      return;
-    }
-
-    let deleted = 0;
-    if (toDelete.length === 1) {
-      await toDelete[0]!.delete().catch(() => {});
-      deleted = 1;
-    } else {
-      const bulk = await channel.bulkDelete(toDelete, true);
-      deleted = bulk.size;
-    }
-
-    const vars = {
-      user: target.user.tag,
-      "user.mention": `<@${target.user.id}>`,
-      "user.id": target.user.id,
-      count: deleted,
-      mod: message.author.tag,
-    };
-
-    const notice = await channel.send(buildPayload(msgs.cleanup_success, vars, `🗑️ Deleted **${deleted}** message${deleted !== 1 ? "s" : ""} from **${target.user.tag}**.`));
-    setTimeout(() => notice.delete().catch(() => {}), 5000);
-  },
-};

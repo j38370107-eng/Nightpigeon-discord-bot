@@ -34,7 +34,7 @@ import modnickCmd from "../commands/mod/modnick";
 import { watchCmd, unwatchCmd, watchlistCmd, logWatchedUserMessage } from "../commands/mod/watch";
 import { rolebanCmd, unrolebanCmd, rolebannedCmd } from "../commands/mod/roleban";
 import { lockCmd, unlockCmd, hideCmd, unhideCmd } from "../commands/mod/lock";
-import { seenCmd, cleanupCmd } from "../commands/mod/cleanup";
+import { seenCmd } from "../commands/mod/cleanup";
 import {
   masswarnCmd, massforcewarnCmd,
   massmuteCmd, massforcemuteCmd,
@@ -110,8 +110,8 @@ export const ALL_COMMANDS: Command[] = [
   // Channel lock/hide
   lockCmd, unlockCmd, hideCmd, unhideCmd,
 
-  // Seen / cleanup
-  seenCmd, cleanupCmd,
+  // Seen
+  seenCmd,
 
   // Mass actions
   masswarnCmd, massforcewarnCmd,
