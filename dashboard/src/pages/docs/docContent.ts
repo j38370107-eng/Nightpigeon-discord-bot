@@ -1437,8 +1437,9 @@ Automod rules can fire far more often than a human moderator would warn someone,
   ban_day_delete: 0
 
   # ── Channel response messages ──────────────────────────────────────────
+  # Every message the bot sends from a moderation command is configurable here.
   # Placeholders available on all messages:
-  #   {user}          username#discriminator of the target
+  #   {user}          username of the target
   #   {user.mention}  <@user_id>
   #   {user.id}       raw user ID
   #   {mod}           moderator's username
@@ -1450,11 +1451,15 @@ Automod rules can fire far more often than a human moderator would warn someone,
   # Extra per action:
   #   ban/tempban/softban  → {duration}  {expires_at}
   #   mute/tempmute        → {duration}  {expires_at}
-  #   purge                → {count}
-  #   slowmode             → {count}  {channel}  {channel.mention}
+  #   purge / slowmode     → {count}
+  #   slowmode             → {channel}  {channel.mention}
+  #   role commands        → {role}
+  #   mass commands        → {count}  (targets affected)
   #
   # Every message supports plain string, embed, or content+embed.
   messages:
+
+    # ── Ban ───────────────────────────────────────────────────────────────
     ban_success:
       embed:
         title: "🔨 Member Banned"
@@ -1470,11 +1475,15 @@ Automod rules can fire far more often than a human moderator would warn someone,
           - name: "Case"
             value: "#{case_id}"
             inline: true
-
-    unban_success: "✅ **{user}** has been unbanned | Case: #{case_id}"
+    tempban_success: "🔨 **{user}** has been temp-banned | Expires: {expires_at} | Case: #{case_id}"
     softban_success: "🔨 **{user}** has been softbanned (messages cleared) | Case: #{case_id}"
+    forceban_success: "🔨 **{user}** (ID: {user.id}) has been forcebanned | Case: #{case_id}"
+    unban_success:   "✅ **{user}** has been unbanned | Case: #{case_id}"
+
+    # ── Kick ─────────────────────────────────────────────────────────────
     kick_success: "👢 **{user}** has been kicked | Case: #{case_id}"
 
+    # ── Mute ─────────────────────────────────────────────────────────────
     mute_success:
       embed:
         title: "🔇 Member Muted"
@@ -1493,44 +1502,118 @@ Automod rules can fire far more often than a human moderator would warn someone,
           - name: "Reason"
             value: "{reason}"
             inline: false
+    tempmute_success:    "🔇 **{user}** has been temp-muted | Expires: {expires_at} | Case: #{case_id}"
+    forcemute_success:   "🔇 **{user}** (ID: {user.id}) has been force-muted | Case: #{case_id}"
+    unmute_success:      "🔊 **{user}** has been unmuted | Case: #{case_id}"
+    forceunmute_success: "🔊 **{user}** (ID: {user.id}) has been force-unmuted | Case: #{case_id}"
 
-    unmute_success: "🔊 **{user}** has been unmuted | Case: #{case_id}"
-    warn_success: "⚠️ **{user}** has been warned | Case: #{case_id}"
+    # ── Warn ─────────────────────────────────────────────────────────────
+    warn_success:      "⚠️ **{user}** has been warned | Case: #{case_id}"
+    forcewarn_success: "⚠️ **{user}** (ID: {user.id}) has been force-warned | Case: #{case_id}"
 
-    # Optional overrides — fall back to the base *_success/*_dm message above
-    # when omitted. Used automatically by the timed/soft variants.
-    tempban_success: "🔨 **{user}** has been temp-banned | Expires: {expires_at} | Case: #{case_id}"
-    softban_success: "🔨 **{user}** has been softbanned (messages cleared) | Case: #{case_id}"
-    tempmute_dm: "You have been **temporarily muted** in **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
-    tempban_dm: "You have been **temporarily banned** from **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
-    softban_dm: "You have been **softbanned** from **{server}** (your recent messages were cleared).\n**Reason:** {reason}"
+    # ── Nick ─────────────────────────────────────────────────────────────
+    nick_success:      "✏️ Nickname set for **{user}**."
+    resetnick_success: "✏️ Nickname reset for **{user}**."
+    locknick_success:  "🔒 Nickname locked for **{user}**."
+    unlocknick_success: "🔓 Nickname unlocked for **{user}**."
 
-    purge_success: "🗑️ {count} messages deleted"
-    slowmode_success: "🐢 Slowmode set to {count}s in {channel.mention}"
-    slowmode_off: "✅ Slowmode removed in {channel.mention}"
+    # ── Hide / Unhide ─────────────────────────────────────────────────────
+    hide_success:   "👁️ {channel.mention} has been hidden."
+    unhide_success: "👁️ {channel.mention} has been unhidden."
 
-    # Lock/unlock: *_success posts in the channel the command was run from;
-    # *_channel_notice posts in the target channel when it differs from that
-    # (e.g. running !lock #general from a mod-only channel).
-    lock_success: "🔒 {channel.mention} has been locked | {reason}"
-    lock_channel_notice: "🔒 This channel has been locked. **Reason:** {reason}"
-    unlock_success: "🔓 {channel.mention} has been unlocked"
+    # ── Lock / Unlock ─────────────────────────────────────────────────────
+    # *_success posts in the channel the command was run from.
+    # *_channel_notice posts in the target channel when it differs from where
+    # !lock was invoked (e.g. running !lock #general from a mod-only channel).
+    lock_success:         "🔒 {channel.mention} has been locked | {reason}"
+    lock_channel_notice:  "🔒 This channel has been locked. **Reason:** {reason}"
+    unlock_success:       "🔓 {channel.mention} has been unlocked"
     unlock_channel_notice: "🔓 This channel has been unlocked."
 
-    # ── DM messages sent directly to the actioned user ──────────────────
-    ban_dm: "You have been **banned** from **{server}**.\n**Reason:** {reason}\n**Duration:** {duration}"
-    unban_dm: "You have been **unbanned** from **{server}**."
-    kick_dm: "You have been **kicked** from **{server}**.\n**Reason:** {reason}"
-    mute_dm: "You have been **muted** in **{server}**.\n**Reason:** {reason}\n**Duration:** {duration}\n**Expires:** {expires_at}"
-    unmute_dm: "You have been **unmuted** in **{server}**."
-    warn_dm: "You have received a **warning** in **{server}**.\n**Reason:** {reason}\n**Total warnings:** {count}"
+    # ── Slowmode ──────────────────────────────────────────────────────────
+    slowmode_success: "🐢 Slowmode set to {count}s in {channel.mention}"
+    slowmode_off:     "✅ Slowmode removed in {channel.mention}"
 
-    # ── Error messages ───────────────────────────────────────────────────
-    # Only error_hierarchy is currently YAML-configurable (used by !modnick
-    # and mass-action commands when a target outranks the moderator).
-    # Every other error/permission message below is a fixed, non-customizable
-    # bot reply (e.g. "❌ You don't have permission to use this command.").
-    error_hierarchy: "❌ You cannot action a member with an equal or higher level."
+    # ── Purge ────────────────────────────────────────────────────────────
+    purge_success: "🗑️ {count} messages deleted"
+
+    # ── Watch ─────────────────────────────────────────────────────────────
+    watch_success:   "👁️ **{user}** is now being watched."
+    unwatch_success: "✅ **{user}** has been removed from the watchlist."
+
+    # ── Role-ban ──────────────────────────────────────────────────────────
+    roleban_success:   "🚫 **{user}** has been role-banned from **{role}**."
+    unroleban_success: "✅ **{user}**'s role-ban for **{role}** has been lifted."
+
+    # ── Roles ─────────────────────────────────────────────────────────────
+    addrole_success:    "✅ Added **{role}** to **{user}**."
+    removerole_success: "✅ Removed **{role}** from **{user}**."
+    temprole_success:   "⏱️ Gave **{role}** to **{user}** for **{duration}**. Expires: {expires_at}"
+
+    # ── Mass role ─────────────────────────────────────────────────────────
+    massrole_success:       "✅ Added **{role}** to **{count}** members."
+    massremoverole_success: "✅ Removed **{role}** from **{count}** members."
+    masstemprole_success:   "⏱️ Gave **{role}** to **{count}** members for **{duration}**."
+
+    # ── Notes ────────────────────────────────────────────────────────────
+    note_success:       "📝 Note added for **{user}** | Case: #{case_id}"
+    deletenote_success: "🗑️ Note #{case_id} deleted."
+
+    # ── Raid mode ────────────────────────────────────────────────────────
+    raidmode_on_success:  "🚨 **Raid mode activated** by {mod}. {count} channel(s) locked."
+    raidmode_off_success: "✅ **Raid mode deactivated.** Channels unlocked."
+
+    # ── DM messages sent directly to the actioned user ───────────────────
+    ban_dm:      "You have been **banned** from **{server}**.\n**Reason:** {reason}\n**Duration:** {duration}"
+    tempban_dm:  "You have been **temporarily banned** from **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
+    softban_dm:  "You have been **softbanned** from **{server}** (your recent messages were cleared).\n**Reason:** {reason}"
+    unban_dm:    "You have been **unbanned** from **{server}**."
+    kick_dm:     "You have been **kicked** from **{server}**.\n**Reason:** {reason}"
+    mute_dm:     "You have been **muted** in **{server}**.\n**Reason:** {reason}\n**Duration:** {duration}\n**Expires:** {expires_at}"
+    tempmute_dm: "You have been **temporarily muted** in **{server}**.\n**Reason:** {reason}\n**Expires:** {expires_at}"
+    unmute_dm:   "You have been **unmuted** in **{server}**."
+    warn_dm:     "You have received a **warning** in **{server}**.\n**Reason:** {reason}\n**Total warnings:** {count}"
+
+    # ── Informational / empty-state messages ──────────────────────────────
+    raidmode_inactive:     "🟢 Raid mode is **INACTIVE**."
+    banlist_empty:         "✅ No bans in this server."
+    mutelist_empty:        "✅ No muted members."
+    temproles_empty:       "✅ No active temp roles."
+    watchlist_empty:       "✅ Watchlist is empty."
+    watchlist_no_entry:    "✅ **{user}** has no watchlist entry."
+    rolebanned_empty:      "✅ No role bans in this server."
+    rolebanned_user_empty: "✅ **{user}** has no role bans."
+    no_notes:              "✅ No notes found for **{user}**."
+    seen_no_data:          "❌ No data for **{user}** — they may not have sent a message since the bot was added."
+    modnick_not_enabled:   "⚙️ The modnick plugin is not enabled in this server's YAML config."
+    modnick_clean:         "✅ **{user}** nickname is clean — no violations found."
+
+    # ── Error messages (err_ prefix) ──────────────────────────────────────
+    err_no_permission:        "❌ You don't have permission to use this command."
+    err_user_not_found:       "❌ Could not find that user."
+    err_user_not_in_server:   "❌ That user is not in this server."
+    err_cannot_ban_self:      "❌ You cannot ban yourself."
+    err_cannot_kick_self:     "❌ You cannot kick yourself."
+    err_cannot_mute_self:     "❌ You cannot mute yourself."
+    err_bot_missing_perms:    "❌ I don't have permission to do that."
+    err_hierarchy:            "❌ You cannot action a member with an equal or higher level."
+    err_already_muted:        "❌ **{user}** is already muted."
+    err_not_muted:            "❌ **{user}** is not muted."
+    err_already_banned:       "❌ **{user}** is already banned."
+    err_not_banned:           "❌ **{user}** is not banned."
+    err_invalid_duration:     "❌ Invalid duration. Examples: \`1h\`, \`7d\`, \`30m\`."
+    err_role_not_found:       "❌ Could not find that role."
+    err_role_managed:         "❌ That role is managed by an integration and cannot be assigned."
+    err_role_above_bot:       "❌ That role is above my highest role."
+    err_massrole_no_targets:  "❌ No valid targets found — mention users or provide raw IDs."
+    err_raidmode_usage:       "❌ Usage: \`!raidmode on\`, \`!raidmode off\`, or \`!raidmode status\`."
+    err_raidmode_already_on:  "⚠️ Raid mode is already active."
+    err_raidmode_already_off: "⚠️ Raid mode is not currently active."
+    err_nick_too_long:        "❌ Nickname cannot be longer than 32 characters."
+    err_locknick_missing_arg: "❌ Please provide a nickname to lock."
+    err_slowmode_out_of_range: "❌ Slowmode must be between 0 and 21600 seconds."
+    err_purge_count_missing:  "❌ Please provide a number of messages to delete."
+    err_roleban_target_required: "❌ Please mention a user or provide a user ID."
 
 # ── Moderation logging ─────────────────────────────────────────────────
 # Moderation log events are configured under logging.config.moderation.
@@ -1692,33 +1775,98 @@ logging:
           { key: "moderation.strip_roles_on_mute", type: "boolean", default: "false", description: "Remove all roles when muted; restore them on unmute" },
           { key: "moderation.dm_mute_updates", type: "boolean", default: "false", description: "DM the user when their mute duration is updated or approaching expiry" },
           {
-            key: "moderation.messages", type: "object", description: "Channel success responses and DMs. All support plain string, embed, or content+embed format.",
+            key: "moderation.messages", type: "object", description: "Every channel reply, DM, empty-state notice, and error message the bot sends from a moderation command. All entries support plain string, embed, or content+embed format.",
             children: [
+              // ── Success messages ──
               { key: "ban_success", type: "message", description: "Ban confirmed in channel. Vars: {user} {mod} {reason} {duration} {expires_at} {case_id}" },
               { key: "tempban_success", type: "message", description: "Tempban confirmed. Vars: {duration} {expires_at} {case_id}" },
               { key: "softban_success", type: "message", description: "Softban confirmed." },
+              { key: "forceban_success", type: "message", description: "Forceban (by ID) confirmed." },
               { key: "unban_success", type: "message", description: "Unban confirmed." },
               { key: "kick_success", type: "message", description: "Kick confirmed." },
               { key: "mute_success", type: "message", description: "Mute confirmed. Vars: {duration} {expires_at}" },
+              { key: "tempmute_success", type: "message", description: "Tempmute confirmed. Vars: {duration} {expires_at}" },
+              { key: "forcemute_success", type: "message", description: "Forcemute (by ID) confirmed." },
               { key: "unmute_success", type: "message", description: "Unmute confirmed." },
+              { key: "forceunmute_success", type: "message", description: "Forceunmute (by ID) confirmed." },
               { key: "warn_success", type: "message", description: "Warn confirmed. Var: {count} = total warn count" },
-              { key: "purge_success", type: "message", description: "Purge result. Var: {count} = messages deleted" },
+              { key: "forcewarn_success", type: "message", description: "Forcewarn (by ID) confirmed." },
+              { key: "nick_success", type: "message", description: "Nickname set confirmed." },
+              { key: "resetnick_success", type: "message", description: "Nickname reset confirmed." },
+              { key: "locknick_success", type: "message", description: "Nickname locked confirmed." },
+              { key: "unlocknick_success", type: "message", description: "Nickname unlocked confirmed." },
+              { key: "hide_success", type: "message", description: "Channel hidden confirmed." },
+              { key: "unhide_success", type: "message", description: "Channel unhidden confirmed." },
+              { key: "lock_success", type: "message", description: "Posted where !lock was run. Vars: {channel} {channel.mention} {reason}" },
+              { key: "lock_channel_notice", type: "message", description: "Posted in the locked channel when it differs from where the command was run." },
+              { key: "unlock_success", type: "message", description: "Posted where !unlock was run." },
+              { key: "unlock_channel_notice", type: "message", description: "Posted in the unlocked channel when it differs." },
               { key: "slowmode_success", type: "message", description: "Slowmode set. Vars: {count} {channel} {channel.mention}" },
               { key: "slowmode_off", type: "message", description: "Slowmode disabled." },
-              { key: "lock_success", type: "message", description: "Posted in the channel the !lock command was run from." },
-              { key: "lock_channel_notice", type: "message", description: "Posted in the target channel itself when it's different from where !lock was run. Falls back to lock_success if unset." },
-              { key: "unlock_success", type: "message", description: "Posted in the channel the !unlock command was run from." },
-              { key: "unlock_channel_notice", type: "message", description: "Posted in the target channel itself. Falls back to unlock_success if unset." },
+              { key: "purge_success", type: "message", description: "Purge result. Var: {count} = messages deleted" },
+              { key: "watch_success", type: "message", description: "User added to watchlist." },
+              { key: "unwatch_success", type: "message", description: "User removed from watchlist." },
+              { key: "roleban_success", type: "message", description: "Role-ban applied. Vars: {user} {role}" },
+              { key: "unroleban_success", type: "message", description: "Role-ban lifted. Vars: {user} {role}" },
+              { key: "addrole_success", type: "message", description: "Role added. Vars: {user} {role}" },
+              { key: "removerole_success", type: "message", description: "Role removed. Vars: {user} {role}" },
+              { key: "temprole_success", type: "message", description: "Temp role given. Vars: {user} {role} {duration} {expires_at}" },
+              { key: "massrole_success", type: "message", description: "Mass role add result. Vars: {role} {count} {mod} {reason}" },
+              { key: "massremoverole_success", type: "message", description: "Mass role remove result. Vars: {role} {count}" },
+              { key: "masstemprole_success", type: "message", description: "Mass temp role result. Vars: {role} {count} {duration} {expires_at}" },
+              { key: "note_success", type: "message", description: "Note added. Vars: {user} {case_id}" },
+              { key: "deletenote_success", type: "message", description: "Note deleted. Var: {case_id}" },
+              { key: "raidmode_on_success", type: "message", description: "Raid mode activated. Vars: {mod} {count} (channels locked)" },
+              { key: "raidmode_off_success", type: "message", description: "Raid mode deactivated." },
+              // ── DM messages ──
               { key: "ban_dm", type: "message", description: "DM to banned user. Vars: {server} {reason} {duration}" },
               { key: "tempban_dm", type: "message", description: "DM to tempbanned user. Falls back to ban_dm if unset." },
+              { key: "softban_dm", type: "message", description: "DM to softbanned user. Falls back to ban_dm if unset." },
               { key: "unban_dm", type: "message", description: "DM to unbanned user." },
               { key: "kick_dm", type: "message", description: "DM to kicked user." },
-              { key: "softban_dm", type: "message", description: "DM to softbanned user. Falls back to ban_dm if unset." },
-              { key: "mute_dm", type: "message", description: "DM to muted user." },
+              { key: "mute_dm", type: "message", description: "DM to muted user. Vars: {server} {reason} {duration} {expires_at}" },
               { key: "tempmute_dm", type: "message", description: "DM to temp-muted user. Falls back to mute_dm if unset." },
               { key: "unmute_dm", type: "message", description: "DM to unmuted user." },
               { key: "warn_dm", type: "message", description: "DM to warned user. Var: {count} = warn count" },
-              { key: "error_hierarchy", type: "message", description: "Shown when a moderator tries to action a member with an equal or higher permission level. This is the only error message currently customizable via YAML — used by !modnick and mass-action commands." },
+              // ── Informational / empty-state ──
+              { key: "raidmode_inactive", type: "message", description: "Reply to !raidmode status when raid mode is off." },
+              { key: "banlist_empty", type: "message", description: "Reply to !banlist when there are no bans." },
+              { key: "mutelist_empty", type: "message", description: "Reply to !mutelist when no members are muted." },
+              { key: "temproles_empty", type: "message", description: "Reply to !temproles when no temp roles are active." },
+              { key: "watchlist_empty", type: "message", description: "Reply to !watchlist when the list is empty." },
+              { key: "watchlist_no_entry", type: "message", description: "Reply to !unwatch when the user has no watchlist entry. Var: {user}" },
+              { key: "rolebanned_empty", type: "message", description: "Reply to !rolebanned when no role bans exist." },
+              { key: "rolebanned_user_empty", type: "message", description: "Reply to !rolebanned @user when the user has no role bans. Var: {user}" },
+              { key: "no_notes", type: "message", description: "Reply to !viewnotes when no notes exist for the user. Var: {user}" },
+              { key: "seen_no_data", type: "message", description: "Reply to !seen when no tracking data exists for the user. Var: {user}" },
+              { key: "modnick_not_enabled", type: "message", description: "Reply when !modnick is run but the modnick plugin is disabled in YAML." },
+              { key: "modnick_clean", type: "message", description: "Reply when !modnick finds no nickname violations. Var: {user}" },
+              // ── Error messages (err_ prefix) ──
+              { key: "err_no_permission", type: "message", description: "Generic permission denied reply." },
+              { key: "err_user_not_found", type: "message", description: "Target user not found." },
+              { key: "err_user_not_in_server", type: "message", description: "Target user not in this server." },
+              { key: "err_cannot_ban_self", type: "message", description: "Moderator tried to ban themselves." },
+              { key: "err_cannot_kick_self", type: "message", description: "Moderator tried to kick themselves." },
+              { key: "err_cannot_mute_self", type: "message", description: "Moderator tried to mute themselves." },
+              { key: "err_bot_missing_perms", type: "message", description: "Bot lacks Discord permissions to perform the action." },
+              { key: "err_hierarchy", type: "message", description: "Moderator tried to action a user with equal or higher YAML level." },
+              { key: "err_already_muted", type: "message", description: "Target is already muted. Var: {user}" },
+              { key: "err_not_muted", type: "message", description: "Target is not muted. Var: {user}" },
+              { key: "err_already_banned", type: "message", description: "Target is already banned. Var: {user}" },
+              { key: "err_not_banned", type: "message", description: "Target is not banned. Var: {user}" },
+              { key: "err_invalid_duration", type: "message", description: "Duration string could not be parsed." },
+              { key: "err_role_not_found", type: "message", description: "Role name/ID could not be resolved." },
+              { key: "err_role_managed", type: "message", description: "Role is managed by an integration (e.g. bot role)." },
+              { key: "err_role_above_bot", type: "message", description: "Role is above the bot's highest role." },
+              { key: "err_massrole_no_targets", type: "message", description: "No valid user targets were found in the mass role command." },
+              { key: "err_raidmode_usage", type: "message", description: "Invalid !raidmode subcommand." },
+              { key: "err_raidmode_already_on", type: "message", description: "Raid mode is already active." },
+              { key: "err_raidmode_already_off", type: "message", description: "Raid mode is not currently active." },
+              { key: "err_nick_too_long", type: "message", description: "Nickname exceeds 32 characters." },
+              { key: "err_locknick_missing_arg", type: "message", description: "!locknick called without a nickname argument." },
+              { key: "err_slowmode_out_of_range", type: "message", description: "Slowmode value is outside the 0–21600 range." },
+              { key: "err_purge_count_missing", type: "message", description: "!purge called without a count." },
+              { key: "err_roleban_target_required", type: "message", description: "!roleban called without a target." },
             ],
           },
           { key: "logging.config.moderation.events", type: "object", description: "Map each mod action to a named channel defined in logging.config.channels" },
@@ -1771,15 +1919,9 @@ Every action has a \`force\` variant that accepts a raw user ID instead of a men
 
 ---
 
-## Customizable vs. fixed messages
+## Message customization
 
-Not every moderation command reads from \`moderation.messages\`. Commands are split into two groups:
-
-**YAML-customizable** (edit the text/embed via \`moderation.messages\`):
-\`warn\`, \`ban\` / \`tempban\` / \`softban\` / \`forceban\`, \`unban\`, \`kick\`, \`mute\` / \`tempmute\` / \`forcemute\`, \`unmute\` / \`forceunmute\`, \`purge\`, \`slowmode\`, \`lock\` / \`unlock\`.
-
-**Fixed bot replies** (not YAML-configurable — always send a built-in message):
-\`nick\`, \`resetnick\`, \`locknick\`, \`unlocknick\`, \`hide\`, \`unhide\`, \`watch\`, \`unwatch\`, \`watchlist\`, \`roleban\`, \`unroleban\`, \`rolebanned\`, \`seen\`, \`cleanup\`, all \`case\`/\`note\` commands. These always reply with their default wording; only their permission level is configurable (see [Permissions](#permissions)).
+Every reply the bot sends from a moderation command is customizable via \`moderation.messages\` in your YAML config — success messages, DMs, empty-state notices ("no bans found", "watchlist is empty"), and all error messages. See the **Configuration reference** table below for the full list of keys and their template variables.
 
 ---
 
