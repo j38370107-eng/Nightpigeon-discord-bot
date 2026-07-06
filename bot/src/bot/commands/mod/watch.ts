@@ -2,6 +2,8 @@ import { Client, EmbedBuilder, Message } from "discord.js";
 import type { Command } from "../types";
 import { resolveTarget, getArgs } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
+import { getCachedConfig } from "../../store/guildConfig";
+import { buildPayload } from "../../lib/msgTemplate";
 import { dbGet, dbSet } from "../../store/db";
 import { sendYamlLogCached } from "../../lib/yamlLogging";
 
@@ -34,18 +36,24 @@ export const watchCmd: Command = {
   description: "Add a user to the watchlist for monitoring.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "watch"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
 
     const reason = getArgs(message, args).join(" ") || "No reason provided";
 
     const list = await loadWatchlist(message.guild.id);
     if (list[target.user.id]) {
-      return void message.reply(`⚠️ **${target.user.tag}** is already on the watchlist.`);
+      return void message.reply(
+        buildPayload(msgs.err_watch_already, { user: target.user.tag, "user.id": target.user.id }, `⚠️ **${target.user.tag}** is already on the watchlist.`)
+      );
     }
 
     list[target.user.id] = {
@@ -58,7 +66,15 @@ export const watchCmd: Command = {
     };
     await saveWatchlist(message.guild.id, list);
 
-    await message.reply(`👁️ **${target.user.tag}** has been added to the watchlist.\n**Reason:** ${reason}`);
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      mod: message.author.tag,
+      reason,
+    };
+
+    await message.reply(buildPayload(msgs.watch_success, vars, `👁️ **${target.user.tag}** has been added to the watchlist.\n**Reason:** ${reason}`));
   },
 };
 
@@ -70,22 +86,35 @@ export const unwatchCmd: Command = {
   description: "Remove a user from the watchlist.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "unwatch"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
 
     const list = await loadWatchlist(message.guild.id);
     if (!list[target.user.id]) {
-      return void message.reply(`❌ **${target.user.tag}** is not on the watchlist.`);
+      return void message.reply(
+        buildPayload(msgs.err_watch_not_found, { user: target.user.tag, "user.id": target.user.id }, `❌ **${target.user.tag}** is not on the watchlist.`)
+      );
     }
 
     delete list[target.user.id];
     await saveWatchlist(message.guild.id, list);
 
-    await message.reply(`✅ **${target.user.tag}** has been removed from the watchlist.`);
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.unwatch_success, vars, `✅ **${target.user.tag}** has been removed from the watchlist.`));
   },
 };
 
@@ -97,14 +126,18 @@ export const watchlistCmd: Command = {
   description: "Show all users currently on the watchlist.",
   async execute(message: Message, _args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "watchlist"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const list = await loadWatchlist(message.guild.id);
     const entries = Object.values(list);
 
-    if (entries.length === 0) return void message.reply("✅ Watchlist is empty.");
+    const modCfg = getCachedConfig(message.guild.id);
+    const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+    if (entries.length === 0) return void message.reply(buildPayload(modMsgs.watchlist_empty, {}, "✅ Watchlist is empty."));
 
     const lines = entries.map(
       (e) =>

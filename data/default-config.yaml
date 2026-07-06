@@ -1,0 +1,241 @@
+# ============================================================
+# NightPigeon — Full Default Configuration Reference
+# ============================================================
+# Copy/paste any section into your guild's YAML config.
+# Every value shown is the built-in default.
+# Omitted keys are inherited from the default automatically.
+#
+# Template variables you can use in ANY message:
+#   {user}             — username#discriminator of the target
+#   {user.mention}     — @mention of the target
+#   {user.id}          — target user ID
+#   {user.name}        — username only (no discriminator)
+#   {mod}              — moderator tag
+#   {mod.mention}      — @mention of the moderator
+#   {reason}           — reason string
+#   {case_id}          — case number
+#   {duration}         — duration string (e.g. "7d")
+#   {expires_at}       — Discord timestamp for expiry
+#   {server}           — server name
+#   {channel}          — channel mention
+#   {count}            — numeric count (purge amount, etc.)
+#   {role}             — role name
+#   {nickname}         — new nickname
+#   {note_id}          — note number
+# ============================================================
+
+prefix: "!"
+
+# ── Levels ──────────────────────────────────────────────────
+levels:
+  users: {}
+  roles: {}
+  commands: {}
+
+# ── Plugins ─────────────────────────────────────────────────
+plugins:
+
+  # ── Moderation plugin ────────────────────────────────────
+  moderation:
+    enabled: true
+    mute_role: null          # Role ID to use as mute role (null = Discord timeout)
+    dm_on_action: true       # Send a DM when a mod action is taken
+
+    messages:
+
+      # ── Action success messages ──────────────────────────
+      # Supports plain string or full embed object (see tags docs for embed format)
+
+      ban_success:            "🔨 **{user}** has been banned | Case: #{case_id}"
+      tempban_success:        "🔨 **{user}** has been temp banned for **{duration}** | Case: #{case_id}"
+      softban_success:        "🧹 **{user}** has been softbanned (messages cleared) | Case: #{case_id}"
+      unban_success:          "✅ **{user}** has been unbanned | Case: #{case_id}"
+      kick_success:           "👢 **{user}** has been kicked | Case: #{case_id}"
+      mute_success:           "🔇 **{user}** has been muted | Case: #{case_id}"
+      unmute_success:         "🔊 **{user}** has been unmuted | Case: #{case_id}"
+      warn_success:           "⚠️ **{user}** has been warned | Case: #{case_id}"
+      purge_success:          "🗑️ {count} messages deleted"
+      cleanup_success:        "🗑️ Deleted **{count}** messages from **{user}**."
+      slowmode_success:       "⏱️ Slowmode set to **{count}s** in {channel}."
+      slowmode_off:           "✅ Slowmode removed in {channel}."
+      lock_success:           "🔒 {channel} has been locked. **Reason:** {reason}"
+      lock_channel_notice:    "🔒 This channel has been locked. **Reason:** {reason}"
+      unlock_success:         "🔓 {channel} has been unlocked."
+      unlock_channel_notice:  "🔓 This channel has been unlocked."
+      hide_success:           "🙈 {channel} is now hidden from @everyone."
+      unhide_success:         "👁️ {channel} is now visible to @everyone."
+      nick_success:           "✅ Nickname for **{user}** set to **{nickname}**."
+      resetnick_success:      "✅ Nickname for **{user}** has been reset."
+      locknick_success:       "🔒 Nickname for **{user}** locked to **{nickname}**."
+      unlocknick_success:     "🔓 Nickname lock removed for **{user}**."
+      addrole_success:        "✅ Added **{role}** to **{user}**."
+      removerole_success:     "✅ Removed **{role}** from **{user}**."
+      temprole_success:       "⏱️ **{user}** has been given **{role}** for **{duration}**. Expires: {expires_at}"
+      roleban_success:        "🚫 **{user}** has been role-banned from **{role}** | Case: #{case_id}"
+      unroleban_success:      "✅ Role ban lifted — **{user}** can now receive **{role}** again."
+      watch_success:          "👁️ **{user}** has been added to the watchlist.\n**Reason:** {reason}"
+      unwatch_success:        "✅ **{user}** has been removed from the watchlist."
+      note_success:           "📝 Note #{note_id} added for **{user}**."
+      deletenote_success:     "🗑️ Note #{note_id} deleted for **{user}**."
+      raidmode_on_success:    "🚨 **Raid mode activated** by {mod}. {count} channel(s) locked."
+      raidmode_off_success:   "✅ **Raid mode deactivated.** Channels unlocked."
+      massrole_success:       "✅ Added **{role}** to **{count}** members."
+      massremoverole_success: "✅ Removed **{role}** from **{count}** members."
+      masstemprole_success:   "⏱️ Gave **{role}** to **{count}** members for **{duration}**."
+
+      # ── Informational / empty-state messages ─────────────
+      raidmode_inactive:      "🟢 Raid mode is **INACTIVE**."
+      banlist_empty:          "✅ No bans in this server."
+      mutelist_empty:         "✅ No muted members."
+      temproles_empty:        "✅ No active temp roles."
+      watchlist_empty:        "✅ Watchlist is empty."
+      watchlist_no_entry:     "✅ **{user}** has no watchlist entry."
+      rolebanned_empty:       "✅ No role bans in this server."
+      rolebanned_user_empty:  "✅ **{user}** has no role bans."
+      no_notes:               "✅ No notes found for **{user}**."
+      seen_no_data:           "❌ No data for **{user}** — they may not have sent a message since the bot was added."
+      modnick_not_enabled:    "⚙️ The modnick plugin is not enabled in this server's YAML config."
+      modnick_clean:          "✅ **{user}** nickname is clean — no violations found."
+
+      # ── DM messages (sent to the user when actioned) ─────
+      # These are OPTIONAL — leave them out to use the default DM format,
+      # or define them to override with a custom string or embed.
+
+      # ban_dm:        "You have been banned from **{server}**. Reason: {reason}"
+      # tempban_dm:    "You have been temporarily banned from **{server}** for {duration}. Reason: {reason}"
+      # softban_dm:    "You have been softbanned from **{server}**. Reason: {reason}"
+      # kick_dm:       "You have been kicked from **{server}**. Reason: {reason}"
+      # mute_dm:       "You have been muted in **{server}**. Reason: {reason}"
+      # unmute_dm:     "You have been unmuted in **{server}**."
+      # warn_dm:       "You have received a warning in **{server}**. Reason: {reason}"
+      # tempmute_dm:   "You have been muted in **{server}** for {duration}. Reason: {reason}"
+
+      # ── Error messages ────────────────────────────────────
+      # All errors are fully customizable. Each supports plain string or embed.
+
+      # Generic
+      err_no_permission:        "❌ You don't have permission to use this command."
+      err_user_not_found:       "❌ Could not find that user."
+      err_not_in_server:        "❌ That user is not in this server."
+      err_invalid_id:           "❌ Please provide a valid user ID."
+      err_invalid_duration:     "❌ Please provide a valid duration (e.g. `1h`, `7d`)."
+      err_provide_role:         "❌ Please provide a role."
+      err_hierarchy:            "❌ You cannot action someone with an equal or higher level."
+
+      # Ban errors
+      err_cannot_ban_self:      "❌ You cannot ban yourself."
+      err_cannot_ban_bot:       "❌ I cannot ban myself."
+      err_cannot_softban_self:  "❌ You cannot softban yourself."
+      err_bot_cannot_ban:       "❌ I cannot ban that member — they may have a higher role than me."
+      err_not_banned:           "❌ That user is not banned in this server."
+
+      # Kick errors
+      err_bot_cannot_kick:      "❌ I cannot kick that member — they may have a higher role than me."
+      err_cannot_kick_self:     "❌ You cannot kick yourself."
+
+      # Mute errors
+      err_cannot_mute_self:     "❌ You cannot mute yourself."
+      err_bot_cannot_mute:      "❌ I cannot mute that member — they may have a higher role than me."
+
+      # Warn errors
+      err_cannot_warn_self:     "❌ You cannot warn yourself."
+      err_cannot_warn_bot:      "❌ You cannot warn a bot."
+
+      # Purge / Cleanup errors
+      err_purge_invalid:        "❌ Please provide a number between 1 and 100."
+      err_cleanup_invalid:      "❌ Please provide a number between 1 and 100."
+      err_cleanup_no_messages:  "❌ No recent messages found for that user (messages may be older than 14 days)."
+
+      # Slowmode errors
+      err_slowmode_usage: |
+        ❌ Usage: `slowmode <time|+time|-time|off> [#channel]`
+        Examples: `slowmode 5m`, `slowmode 30s`, `slowmode +5`, `slowmode off`
+      err_slowmode_invalid:     "❌ Invalid duration. Use a number with `s`, `m`, or `h` (e.g. `5m`), a relative change like `+5` or `-5`, or `off`."
+
+      # Nick errors
+      err_nick_cannot_manage:   "❌ I cannot manage that member's nickname."
+      err_nick_required:        "❌ Please provide a nickname."
+      err_nick_no_lock:         "❌ **{user}** does not have a locked nickname."
+
+      # Role errors
+      err_role_not_found:       "❌ Could not find that role."
+      err_role_managed:         "❌ That role is managed by an integration."
+      err_role_above_bot:       "❌ That role is above my highest role."
+      err_role_already_has:     "❌ **{user}** already has the **{role}** role."
+      err_role_does_not_have:   "❌ **{user}** does not have the **{role}** role."
+      err_temprole_usage:       "❌ Usage: `!temprole @user <role> <duration> [reason]`"
+      err_unroleban_not_found:  "❌ **{user}** is not role-banned from **{role}**."
+
+      # Mass role errors
+      err_massrole_not_found:   "❌ Could not find that role."
+      err_massrole_no_targets:  "❌ No valid targets found — mention users or provide raw IDs."
+
+      # Watch errors
+      err_watch_already:        "⚠️ **{user}** is already on the watchlist."
+      err_watch_not_found:      "❌ **{user}** is not on the watchlist."
+
+      # Note errors
+      err_note_required:        "❌ Please provide note text."
+      err_note_invalid_id:      "❌ Please provide a valid note ID."
+      err_note_not_found:       "❌ Note #{note_id} not found for that user."
+
+      # Raidmode errors
+      err_raidmode_usage:       "❌ Usage: `!raidmode on`, `!raidmode off`, or `!raidmode status`"
+      err_raidmode_already_on:  "⚠️ Raid mode is already active."
+      err_raidmode_already_off: "⚠️ Raid mode is not currently active."
+
+  # ── Reaction Roles plugin ─────────────────────────────────
+  reaction_roles:
+    messages:
+      rr_role_given:            "✅ You have been given **{trigger}**"
+      rr_role_removed:          "❌ You no longer have **{trigger}**"
+      rr_max_reached:           "❌ You can only have **{count}** role(s) from this panel"
+      rr_missing_required:      "❌ You need the **{trigger}** role to use this panel"
+      rr_assign_dm:             "You have been given the **{trigger}** role in **{server}**"
+      rr_remove_dm:             "The **{trigger}** role has been removed in **{server}**"
+      rr_created:               "✅ Panel **{trigger}** created. Add roles with `!rr add {trigger} <@role> <label>`, then post with `!rr post {trigger}`."
+      rr_already_exists:        "❌ A panel named **{trigger}** already exists."
+      rr_entry_added:           "✅ Role added to panel **{reason}**."
+      rr_entry_removed:         "✅ Entry removed from panel **{reason}**."
+      rr_entry_not_found:       "❌ That role is not in panel **{reason}**."
+      rr_max_entries_reached:   "❌ Panel **{trigger}** is full (max {count} entries)."
+      rr_no_entries:            "❌ Panel **{trigger}** has no entries. Use `!rr add` to add some."
+      rr_posted:                "✅ Panel **{trigger}** posted in {channel}."
+      rr_edited:                "✅ Panel **{trigger}** updated."
+
+  # ── Utility plugin (tag error messages) ───────────────────
+  utility:
+    messages:
+      tag_not_found: "Tag **{trigger}** not found. Use `!tag list` to see all available tags."
+      tag_list_empty: "No tags have been created yet. Ask an admin to add some."
+
+# ── Example: Using an embed as an error message ───────────────────────────────
+# Any message key can be a plain string OR a full embed object:
+#
+#   err_no_permission:
+#     embed:
+#       title: "🚫 Access Denied"
+#       description: "You don't have permission to use this command."
+#       color: "#e74c3c"
+#       footer: "Contact a moderator if you believe this is a mistake."
+#
+# ── Example: Combined content + embed ────────────────────────────────────────
+#
+#   ban_success:
+#     content: "📋 Moderation action logged."
+#     embed:
+#       title: "🔨 Member Banned"
+#       color: "#e74c3c"
+#       fields:
+#         - name: "User"
+#           value: "{user}"
+#           inline: true
+#         - name: "Moderator"
+#           value: "{mod}"
+#           inline: true
+#         - name: "Reason"
+#           value: "{reason}"
+#           inline: false
+#         - name: "Case"
+#           value: "#{case_id}"
+#           inline: true

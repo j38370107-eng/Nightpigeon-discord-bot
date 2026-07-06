@@ -2,6 +2,8 @@ import { Client, EmbedBuilder, Message } from "discord.js";
 import type { Command } from "../types";
 import { resolveTarget } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
+import { getCachedConfig } from "../../store/guildConfig";
+import { buildPayload } from "../../lib/msgTemplate";
 import { dbGet, dbSet } from "../../store/db";
 
 const STORE = "mod_notes";
@@ -43,15 +45,19 @@ export const noteCmd: Command = {
   description: "Add a private note to a user's record.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "note"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
 
     const text = args.slice(message.mentions.users.size > 0 ? 1 : 1).join(" ");
-    if (!text) return void message.reply("❌ Please provide note text.");
+    if (!text) return void message.reply(buildPayload(msgs.err_note_required, {}, "❌ Please provide note text."));
 
     const notes = await loadNotes(message.guild.id);
     const userNotes = notes[target.user.id] ?? [];
@@ -67,9 +73,15 @@ export const noteCmd: Command = {
     notes[target.user.id] = userNotes;
     await saveNotes(message.guild.id, notes);
 
-    await message.reply(
-      `📝 Note #${id} added for **${target.user.tag}**.`
-    );
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      mod: message.author.tag,
+      note_id: id,
+    };
+
+    await message.reply(buildPayload(msgs.note_success, vars, `📝 Note #${id} added for **${target.user.tag}**.`));
   },
 };
 
@@ -81,18 +93,22 @@ export const viewnotesCmd: Command = {
   description: "View all notes for a user.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "viewnotes"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
 
     const notes = await loadNotes(message.guild.id);
     const userNotes = notes[target.user.id] ?? [];
 
     if (userNotes.length === 0) {
-      return void message.reply(`✅ No notes found for **${target.user.tag}**.`);
+      const modCfg = getCachedConfig(message.guild.id);
+      const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+      return void message.reply(buildPayload(modMsgs.no_notes, { user: target.user.tag, "user.id": target.user.id }, `✅ No notes found for **${target.user.tag}**.`));
     }
 
     const lines = userNotes.map(
@@ -112,7 +128,7 @@ export const viewnotesCmd: Command = {
   },
 };
 
-// !deletenote <id>
+// !deletenote @user <id>
 export const deletenoteCmd: Command = {
   name: "deletenote",
   aliases: [],
@@ -120,25 +136,40 @@ export const deletenoteCmd: Command = {
   description: "Delete a specific note from a user.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "deletenote"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
 
     const noteId = parseInt(args[message.mentions.users.size > 0 ? 1 : 1] ?? "", 10);
-    if (isNaN(noteId)) return void message.reply("❌ Please provide a valid note ID.");
+    if (isNaN(noteId)) return void message.reply(buildPayload(msgs.err_note_invalid_id, {}, "❌ Please provide a valid note ID."));
 
     const notes = await loadNotes(message.guild.id);
     const userNotes = notes[target.user.id] ?? [];
     const idx = userNotes.findIndex((n) => n.id === noteId);
-    if (idx === -1) return void message.reply(`❌ Note #${noteId} not found for that user.`);
+    if (idx === -1) {
+      return void message.reply(
+        buildPayload(msgs.err_note_not_found, { note_id: noteId, user: target.user.tag }, `❌ Note #${noteId} not found for that user.`)
+      );
+    }
 
     userNotes.splice(idx, 1);
     notes[target.user.id] = userNotes;
     await saveNotes(message.guild.id, notes);
 
-    await message.reply(`🗑️ Note #${noteId} deleted for **${target.user.tag}**.`);
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      note_id: noteId,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.deletenote_success, vars, `🗑️ Note #${noteId} deleted for **${target.user.tag}**.`));
   },
 };

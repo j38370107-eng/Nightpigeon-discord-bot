@@ -2,9 +2,9 @@ import { Client, Message } from "discord.js";
 import type { Command } from "../types";
 import { resolveTarget } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
-import { runModnick, ModnickConfig } from "../../lib/modnick";
-import { getGuildConfig } from "../../store/guildConfig";
+import { getCachedConfig, getGuildConfig } from "../../store/guildConfig";
 import { buildPayload } from "../../lib/msgTemplate";
+import { runModnick, ModnickConfig } from "../../lib/modnick";
 
 const modnickCmd: Command = {
   name: "modnick",
@@ -14,19 +14,22 @@ const modnickCmd: Command = {
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
 
+    const modCfg = getCachedConfig(message.guild.id);
+    const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "modnick"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(modMsgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(modMsgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(modMsgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
     const cfg = await getGuildConfig(message.guild.id);
     const mcfg = (cfg.plugins?.modnick as ModnickConfig | undefined) ?? {};
 
     if (!mcfg.enabled) {
-      return void message.reply("⚙️ The modnick plugin is not enabled in this server's YAML config.");
+      return void message.reply(buildPayload(modMsgs.modnick_not_enabled, {}, "⚙️ The modnick plugin is not enabled in this server's YAML config."));
     }
 
     // No nickname set
@@ -55,17 +58,18 @@ const modnickCmd: Command = {
 
     if (!result.triggered) {
       const vars = {
-        user: `<@${target.user.id}>`,
-        "user.id": target.user.id,
+        user: target.user.tag,
         "user.mention": `<@${target.user.id}>`,
+        "user.id": target.user.id,
         server: message.guild.name,
         trigger: originalNick,
         reason: originalNick,
         count: "",
         timestamp: new Date().toISOString(),
       };
-      const p = buildPayload(mcfg.messages?.modnick_clean, vars, `${target.user.tag} nickname is clean — no violations found`);
-      return void message.reply(p.content ?? `${target.user.tag} nickname is clean — no violations found`);
+      // Prefer modnick plugin's own clean message, fall back to moderation messages key
+      const cleanMsg = mcfg.messages?.modnick_clean ?? modMsgs.modnick_clean;
+      return void message.reply(buildPayload(cleanMsg, vars, `✅ **${target.user.tag}** nickname is clean — no violations found.`));
     }
 
     if (!result.skipped) {

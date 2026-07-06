@@ -24,19 +24,23 @@ const kickCmd: Command = {
   description: "Kick a member from the server.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "kick"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
-    if (!target.member.kickable) return void message.reply("❌ I cannot kick that member — they may have a higher role than me.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot kick yourself.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
+    if (!target.member.kickable) return void message.reply(buildPayload(msgs.err_bot_cannot_kick, {}, "❌ I cannot kick that member — they may have a higher role than me."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_kick_self, {}, "❌ You cannot kick yourself."));
 
     const executor = await getExecutorMember(message);
     if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-      return void message.reply("❌ You cannot kick someone with an equal or higher role.");
+      return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot kick someone with an equal or higher role."));
     }
 
     const rawReason = getArgs(message, args).join(" ");
@@ -50,9 +54,6 @@ const kickCmd: Command = {
       modTag: message.author.tag,
       reason,
     });
-
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
 
     const vars = {
       user: target.user.tag,

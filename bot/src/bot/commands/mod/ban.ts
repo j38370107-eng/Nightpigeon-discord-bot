@@ -25,20 +25,24 @@ const banCmd: Command = {
   description: "Ban a member. Include a duration (e.g. 7d) for a temp ban.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "ban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot ban yourself.");
-    if (target.user.id === client.user?.id) return void message.reply("❌ I cannot ban myself.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_ban_self, {}, "❌ You cannot ban yourself."));
+    if (target.user.id === client.user?.id) return void message.reply(buildPayload(msgs.err_cannot_ban_bot, {}, "❌ I cannot ban myself."));
 
     if (target.member) {
-      if (!target.member.bannable) return void message.reply("❌ I cannot ban that member — they may have a higher role than me.");
+      if (!target.member.bannable) return void message.reply(buildPayload(msgs.err_bot_cannot_ban, {}, "❌ I cannot ban that member — they may have a higher role than me."));
       const executor = await getExecutorMember(message);
       if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-        return void message.reply("❌ You cannot ban someone with an equal or higher level.");
+        return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot ban someone with an equal or higher level."));
       }
     }
 
@@ -69,9 +73,6 @@ const banCmd: Command = {
       duration: durationMs ? durationLabel : undefined,
       expiresAt,
     });
-
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
 
     const vars = {
       user: target.user.tag,
@@ -124,9 +125,11 @@ const banCmd: Command = {
 
     await message.channel.send(
       buildPayload(
-        msgs.ban_success,
+        durationMs ? msgs.tempban_success ?? msgs.ban_success : msgs.ban_success,
         vars,
-        `🔨 **${target.user.tag}** has been banned${durationMs ? ` for ${durationLabel}` : ""}. Case: #${caseRecord.id}`
+        durationMs
+          ? `🔨 **${target.user.tag}** has been temp banned for **${durationLabel}**. Case: #${caseRecord.id}`
+          : `🔨 **${target.user.tag}** has been banned. Case: #${caseRecord.id}`
       )
     );
 
@@ -141,8 +144,10 @@ export const forcebanCmd: Command = {
   description: "Ban a user by ID — works even if they are not in the server.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "forceban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
     await banCmd.execute(message, args, client);
   },
@@ -155,12 +160,16 @@ export const unbanCmd: Command = {
   description: "Unban a user by ID.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "unban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const rawId = (args[0] ?? "").replace(/[<@!>]/g, "");
-    if (!/^\d{15,20}$/.test(rawId)) return void message.reply("❌ Please provide a valid user ID.");
+    if (!/^\d{15,20}$/.test(rawId)) return void message.reply(buildPayload(msgs.err_invalid_id, {}, "❌ Please provide a valid user ID."));
 
     const reason = args.slice(1).join(" ") || "No reason provided";
 
@@ -170,9 +179,11 @@ export const unbanCmd: Command = {
       userTag = u.tag;
     } catch { /* unknown user */ }
 
-    await message.guild.members.unban(rawId, reason).catch(() => {
-      throw new Error("Could not unban — user may not be banned.");
-    });
+    try {
+      await message.guild.members.unban(rawId, reason);
+    } catch {
+      return void message.reply(buildPayload(msgs.err_not_banned, {}, "❌ That user is not banned in this server."));
+    }
 
     const caseRecord = await addCase(message.guild.id, {
       action: "Unban",
@@ -192,8 +203,6 @@ export const unbanCmd: Command = {
       caseId: String(caseRecord.id),
     });
 
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars = {
       user: userTag,
       "user.mention": `<@${rawId}>`,

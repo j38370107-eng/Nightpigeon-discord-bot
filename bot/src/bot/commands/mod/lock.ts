@@ -1,4 +1,4 @@
-import { Client, EmbedBuilder, Message, OverwriteType, PermissionsBitField, TextChannel, CategoryChannel, NewsChannel } from "discord.js";
+import { Client, Message, NewsChannel, TextChannel } from "discord.js";
 import type { Command } from "../types";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
 import { getCachedConfig } from "../../store/guildConfig";
@@ -38,8 +38,12 @@ export const lockCmd: Command = {
   description: "Lock a channel so @everyone cannot send messages.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "lock"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const targetChannel = (message.mentions.channels.first() as LockableChannel | undefined) ??
@@ -60,12 +64,12 @@ export const lockCmd: Command = {
     };
     await saveLocks(message.guild.id, locks);
 
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars = {
       channel: `<#${targetChannel.id}>`,
       "channel.mention": `<#${targetChannel.id}>`,
       reason,
+      mod: message.author.tag,
+      "mod.mention": `<@${message.author.id}>`,
     };
     const payload = buildPayload(msgs.lock_success, vars, `🔒 <#${targetChannel.id}> has been locked. **Reason:** ${reason}`);
 
@@ -87,8 +91,12 @@ export const unlockCmd: Command = {
   description: "Unlock a previously locked channel.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "unlock"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const targetChannel = (message.mentions.channels.first() as LockableChannel | undefined) ??
@@ -104,12 +112,12 @@ export const unlockCmd: Command = {
     delete locks[targetChannel.id];
     await saveLocks(message.guild.id, locks);
 
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars = {
       channel: `<#${targetChannel.id}>`,
       "channel.mention": `<#${targetChannel.id}>`,
       reason,
+      mod: message.author.tag,
+      "mod.mention": `<@${message.author.id}>`,
     };
 
     await message.channel.send(buildPayload(msgs.unlock_success, vars, `🔓 <#${targetChannel.id}> has been unlocked.`));
@@ -129,8 +137,12 @@ export const hideCmd: Command = {
   description: "Hide a channel from @everyone.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "hide"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const targetChannel = (message.mentions.channels.first() as LockableChannel | undefined) ??
@@ -142,7 +154,14 @@ export const hideCmd: Command = {
       ViewChannel: false,
     }, { reason: `Hidden by ${message.author.tag} — ${reason}` });
 
-    await message.reply(`🙈 <#${targetChannel.id}> is now hidden from @everyone.`);
+    const vars = {
+      channel: `<#${targetChannel.id}>`,
+      "channel.mention": `<#${targetChannel.id}>`,
+      reason,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.hide_success, vars, `🙈 <#${targetChannel.id}> is now hidden from @everyone.`));
   },
 };
 
@@ -154,8 +173,12 @@ export const unhideCmd: Command = {
   description: "Make a hidden channel visible again for @everyone.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "unhide"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const targetChannel = (message.mentions.channels.first() as LockableChannel | undefined) ??
@@ -166,6 +189,12 @@ export const unhideCmd: Command = {
       ViewChannel: null,
     }, { reason: `Unhidden by ${message.author.tag}` });
 
-    await message.reply(`👁️ <#${targetChannel.id}> is now visible to @everyone.`);
+    const vars = {
+      channel: `<#${targetChannel.id}>`,
+      "channel.mention": `<#${targetChannel.id}>`,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.unhide_success, vars, `👁️ <#${targetChannel.id}> is now visible to @everyone.`));
   },
 };

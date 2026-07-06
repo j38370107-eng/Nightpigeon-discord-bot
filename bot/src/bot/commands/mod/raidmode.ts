@@ -1,13 +1,13 @@
 import { Client, Message, TextChannel } from "discord.js";
 import type { Command } from "../types";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
-import { getGuildConfig } from "../../store/guildConfig";
+import { getCachedConfig, getGuildConfig } from "../../store/guildConfig";
+import { buildPayload } from "../../lib/msgTemplate";
 import { sendYamlMessage, buildVars } from "../../lib/yamlFormatter";
 import {
   getRaidState,
   setRaidState,
   deactivateRaidMode,
-  activateRaidMode,
   lockChannels,
 } from "../../handlers/antiraidHandler";
 import type { AntiRaidYamlConfig } from "../../handlers/antiraidHandler";
@@ -20,14 +20,18 @@ export const raidmodeCmd: Command = {
   description: "Manually activate, deactivate, or check the status of raid mode.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const modCfg = getCachedConfig(message.guild.id);
+    const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "raidmode"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(modMsgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const sub = (args[0] ?? "").toLowerCase();
     if (!["on", "off", "status"].includes(sub)) {
       return void message.reply(
-        "❌ Usage: `!raidmode on`, `!raidmode off`, or `!raidmode status`"
+        buildPayload(modMsgs.err_raidmode_usage, {}, "❌ Usage: `!raidmode on`, `!raidmode off`, or `!raidmode status`")
       );
     }
 
@@ -39,7 +43,7 @@ export const raidmodeCmd: Command = {
     if (sub === "on") {
       const state = await getRaidState(guild.id);
       if (state.active) {
-        const reply = msgs.raidmode_already_on ?? "⚠️ Raid mode is already active.";
+        const reply = msgs.raidmode_already_on ?? modMsgs.err_raidmode_already_on ?? "⚠️ Raid mode is already active.";
         return void message.reply(reply);
       }
 
@@ -71,7 +75,7 @@ export const raidmodeCmd: Command = {
         }
       }
 
-      // Start auto-unlock timer (reuse activateRaidMode's timer logic via the handler)
+      // Start auto-unlock timer
       const autoMin = cfg.auto_unlock_minutes ?? 10;
       if (autoMin > 0) {
         setTimeout(() => {
@@ -79,16 +83,26 @@ export const raidmodeCmd: Command = {
         }, autoMin * 60_000);
       }
 
+      const raidOnVars = {
+        mod: message.author.tag,
+        "mod.mention": `<@${message.author.id}>`,
+        count: lockedIds.length,
+      };
+
       await message.reply(
-        `🚨 **Raid mode activated** by ${message.author.tag}.\n` +
-          (lockedIds.length > 0
-            ? `Locked **${lockedIds.length}** channel(s).`
-            : "No channels locked (none configured).")
+        buildPayload(
+          modMsgs.raidmode_on_success,
+          raidOnVars,
+          `🚨 **Raid mode activated** by ${message.author.tag}.\n` +
+            (lockedIds.length > 0
+              ? `Locked **${lockedIds.length}** channel(s).`
+              : "No channels locked (none configured).")
+        )
       );
     } else if (sub === "off") {
       const state = await getRaidState(guild.id);
       if (!state.active) {
-        const reply = msgs.raidmode_already_off ?? "⚠️ Raid mode is not currently active.";
+        const reply = msgs.raidmode_already_off ?? modMsgs.err_raidmode_already_off ?? "⚠️ Raid mode is not currently active.";
         return void message.reply(reply);
       }
 
@@ -110,7 +124,13 @@ export const raidmodeCmd: Command = {
         }
       }
 
-      await message.reply("✅ **Raid mode deactivated.** Channels unlocked.");
+      const raidOffVars = {
+        mod: message.author.tag,
+        "mod.mention": `<@${message.author.id}>`,
+        count: state.lockedChannels.length,
+      };
+
+      await message.reply(buildPayload(modMsgs.raidmode_off_success, raidOffVars, "✅ **Raid mode deactivated.** Channels unlocked."));
     } else if (sub === "status") {
       const state = await getRaidState(guild.id);
 
@@ -144,7 +164,7 @@ export const raidmodeCmd: Command = {
             buildVars({})
           ).catch(() => {});
         } else {
-          await message.reply("🟢 Raid mode is **INACTIVE**.");
+          await message.reply(buildPayload(modMsgs.raidmode_inactive, {}, "🟢 Raid mode is **INACTIVE**."));
         }
       }
     }

@@ -638,15 +638,19 @@ export const massroleCmd: Command = {
   description: "Add a role to multiple members at once.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "massrole"))) return;
 
     const { role, targetIds, reason } = parseMassRoleArgs(message, message.guild, args);
-    if (!role) return void message.reply("❌ Could not find that role. Usage: `!massrole <role> @user1 @user2 ...`");
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (!role) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role. Usage: `!massrole <role> @user1 @user2 ...`"));
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
     if (role.position >= message.guild.members.me!.roles.highest.position) {
-      return void message.reply("❌ That role is above my highest role.");
+      return void message.reply(buildPayload(msgs.err_role_above_bot, {}, "❌ That role is above my highest role."));
     }
-    if (targetIds.length === 0) return void message.reply("❌ No valid targets found — mention users or provide raw IDs.");
+    if (targetIds.length === 0) return void message.reply(buildPayload(msgs.err_massrole_no_targets, {}, "❌ No valid targets found — mention users or provide raw IDs."));
 
     await message.guild.members.fetch().catch(() => {});
     const finalReason = reason || "No reason provided";
@@ -670,9 +674,11 @@ export const massroleCmd: Command = {
       color: 0x2ecc71,
     });
 
-    const lines = [`✅ Added **${role.name}** to **${succeeded.length}** members.`];
-    if (failed.length) lines.push(`❌ Failed for ${failed.length}: ${failed.slice(0, 10).join(", ")}`);
-    await message.reply(lines.join("\n"));
+    const vars = { role: role.name, count: succeeded.length, mod: message.author.tag, reason: finalReason };
+    await message.reply(buildPayload(msgs.massrole_success, vars, `✅ Added **${role.name}** to **${succeeded.length}** members.`));
+    if (failed.length) {
+      await message.channel.send(`❌ Failed for ${failed.length}: ${failed.slice(0, 10).join(", ")}`);
+    }
   },
 };
 
@@ -684,15 +690,19 @@ export const massremoveroleCmd: Command = {
   description: "Remove a role from multiple members at once.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "massremoverole"))) return;
 
     const { role, targetIds, reason } = parseMassRoleArgs(message, message.guild, args);
-    if (!role) return void message.reply("❌ Could not find that role. Usage: `!massremoverole <role> @user1 @user2 ...`");
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (!role) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role. Usage: `!massremoverole <role> @user1 @user2 ...`"));
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
     if (role.position >= message.guild.members.me!.roles.highest.position) {
-      return void message.reply("❌ That role is above my highest role.");
+      return void message.reply(buildPayload(msgs.err_role_above_bot, {}, "❌ That role is above my highest role."));
     }
-    if (targetIds.length === 0) return void message.reply("❌ No valid targets found — mention users or provide raw IDs.");
+    if (targetIds.length === 0) return void message.reply(buildPayload(msgs.err_massrole_no_targets, {}, "❌ No valid targets found — mention users or provide raw IDs."));
 
     await message.guild.members.fetch().catch(() => {});
     const finalReason = reason || "No reason provided";
@@ -716,9 +726,11 @@ export const massremoveroleCmd: Command = {
       color: 0xe67e22,
     });
 
-    const lines = [`✅ Removed **${role.name}** from **${succeeded.length}** members.`];
-    if (failed.length) lines.push(`❌ Failed for ${failed.length}: ${failed.slice(0, 10).join(", ")}`);
-    await message.reply(lines.join("\n"));
+    const vars = { role: role.name, count: succeeded.length, mod: message.author.tag, reason: finalReason };
+    await message.reply(buildPayload(msgs.massremoverole_success, vars, `✅ Removed **${role.name}** from **${succeeded.length}** members.`));
+    if (failed.length) {
+      await message.channel.send(`❌ Failed for ${failed.length}: ${failed.slice(0, 10).join(", ")}`);
+    }
   },
 };
 
@@ -739,16 +751,20 @@ export const masstemproleCmd: Command = {
   description: "Give a role to multiple members for a limited time.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "masstemprole"))) return;
 
     const { role, targetIds, reason, durationMs, durationLabel } = parseMassRoleArgs(message, message.guild, args);
-    if (!role) return void message.reply("❌ Could not find that role. Usage: `!masstemprole <role> <duration> @user1 @user2 ...`");
-    if (!durationMs) return void message.reply("❌ Please provide a valid duration (e.g. `1h`, `7d`).");
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (!role) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role. Usage: `!masstemprole <role> <duration> @user1 @user2 ...`"));
+    if (!durationMs) return void message.reply(buildPayload(msgs.err_invalid_duration, {}, "❌ Please provide a valid duration (e.g. `1h`, `7d`)."));
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
     if (role.position >= message.guild.members.me!.roles.highest.position) {
-      return void message.reply("❌ That role is above my highest role.");
+      return void message.reply(buildPayload(msgs.err_role_above_bot, {}, "❌ That role is above my highest role."));
     }
-    if (targetIds.length === 0) return void message.reply("❌ No valid targets found — mention users or provide raw IDs.");
+    if (targetIds.length === 0) return void message.reply(buildPayload(msgs.err_massrole_no_targets, {}, "❌ No valid targets found — mention users or provide raw IDs."));
 
     await message.guild.members.fetch().catch(() => {});
     const finalReason = reason || "No reason provided";
@@ -788,8 +804,15 @@ export const masstemproleCmd: Command = {
 
     await dbSet(MASS_TEMPROLE_STORE, message.guild.id, existing);
 
-    const lines = [`⏱️ Gave **${role.name}** to **${succeeded.length}** members for **${durationLabel}**.\nExpires: <t:${Math.floor(expiresAt / 1000)}:F>`];
-    if (failed.length) lines.push(`❌ Failed for ${failed.length}: ${failed.slice(0, 10).join(", ")}`);
-    await message.reply(lines.join("\n"));
+    const vars = {
+      role: role.name, count: succeeded.length, duration: durationLabel,
+      expires_at: `<t:${Math.floor(expiresAt / 1000)}:F>`, mod: message.author.tag, reason: finalReason,
+    };
+    await message.reply(buildPayload(msgs.masstemprole_success, vars,
+      `⏱️ Gave **${role.name}** to **${succeeded.length}** members for **${durationLabel}**.\nExpires: <t:${Math.floor(expiresAt / 1000)}:F>`
+    ));
+    if (failed.length) {
+      await message.channel.send(`❌ Failed for ${failed.length}: ${failed.slice(0, 10).join(", ")}`);
+    }
   },
 };

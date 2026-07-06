@@ -23,8 +23,8 @@ async function doBulkDelete(channel: TextChannel, messages: Message[], amount: n
   return result.size;
 }
 
-async function sendNotice(channel: TextChannel, text: string): Promise<void> {
-  const msg = await channel.send(text).catch(() => null);
+async function sendNotice(channel: TextChannel, payload: Parameters<TextChannel["send"]>[0]): Promise<void> {
+  const msg = await channel.send(payload).catch(() => null);
   if (msg) setTimeout(() => msg.delete().catch(() => {}), 5000);
 }
 
@@ -35,13 +35,15 @@ const purgeCmd: Command = {
   description: "Delete messages with various filters.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "purge"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const channel = message.channel as TextChannel;
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
 
     await message.delete().catch(() => {});
 
@@ -50,7 +52,7 @@ const purgeCmd: Command = {
     // !purge <number> [user_id] — basic or filtered by user ID
     if (!isNaN(parseInt(sub, 10))) {
       const amount = Math.min(parseInt(sub, 10), MAX_PURGE);
-      if (amount < 1) return void sendNotice(channel, "❌ Please provide a number between 1 and 100.");
+      if (amount < 1) return void sendNotice(channel, buildPayload(msgs.err_purge_invalid, {}, "❌ Please provide a number between 1 and 100."));
       const rawUserId = args[1];
       const isUserId = rawUserId && /^\d{15,20}$/.test(rawUserId);
       const fetched = await channel.messages.fetch({ limit: MAX_PURGE });

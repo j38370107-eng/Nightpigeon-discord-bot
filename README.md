@@ -19,16 +19,23 @@ Built with **Node.js**, **TypeScript**, **discord.js v14**, **PostgreSQL**, and 
    - [Plugins](#plugins)
    - [YAML Logging](#yaml-logging)
    - [YAML Automod Rules](#yaml-automod-rules)
-3. [Punishment Escalation](#punishment-escalation)
-4. [Automod Escalation](#automod-escalation)
-5. [Anti-Nuke](#anti-nuke)
-6. [Anti-Raid](#anti-raid)
-7. [Server Logging](#server-logging)
-8. [Dashboard](#dashboard)
-9. [Self-Hosting Guide](#self-hosting-guide)
-10. [Environment Variables](#environment-variables)
-11. [Data Storage](#data-storage)
-12. [Project Structure](#project-structure)
+3. [Messages Reference](#messages-reference)
+   - [How Messages Work](#how-messages-work)
+   - [Template Variables](#template-variables)
+   - [Action Success Messages](#action-success-messages)
+   - [DM Messages](#dm-messages)
+   - [Error Messages](#error-messages)
+   - [Reaction Roles Messages](#reaction-roles-messages)
+4. [Punishment Escalation](#punishment-escalation)
+5. [Automod Escalation](#automod-escalation)
+6. [Anti-Nuke](#anti-nuke)
+7. [Anti-Raid](#anti-raid)
+8. [Server Logging](#server-logging)
+9. [Dashboard](#dashboard)
+10. [Self-Hosting Guide](#self-hosting-guide)
+11. [Environment Variables](#environment-variables)
+12. [Data Storage](#data-storage)
+13. [Project Structure](#project-structure)
 
 ---
 
@@ -373,6 +380,256 @@ conditions:
 | `add_message_to_channel` | `channel` (channel ID), `message` |
 | `log` | `channel` (optional extra channel ID) |
 | `set_nickname` | `nickname` |
+
+---
+
+---
+
+## Messages Reference
+
+Every success message, error message, and DM notification sent by the moderation system is fully customizable through your guild's YAML config. See `data/default-config.yaml` for a complete annotated copy of every key with its default value.
+
+### How Messages Work
+
+All messages live under `plugins.moderation.messages` (or `plugins.reaction_roles.messages` for reaction role messages). Each key accepts:
+
+**Plain string:**
+```yaml
+plugins:
+  moderation:
+    messages:
+      ban_success: "**{user}** was banned by {mod}. Case: #{case_id}"
+```
+
+**Embed only:**
+```yaml
+plugins:
+  moderation:
+    messages:
+      ban_success:
+        embed:
+          title: "🔨 Member Banned"
+          color: "#e74c3c"
+          fields:
+            - name: "User"
+              value: "{user}"
+              inline: true
+            - name: "Moderator"
+              value: "{mod}"
+              inline: true
+            - name: "Reason"
+              value: "{reason}"
+              inline: false
+            - name: "Case"
+              value: "#{case_id}"
+              inline: true
+```
+
+**Content + embed combined:**
+```yaml
+plugins:
+  moderation:
+    messages:
+      ban_success:
+        content: "Action logged in <#CHANNEL_ID>."
+        embed:
+          title: "🔨 {user} banned"
+          color: "#e74c3c"
+          description: "**Reason:** {reason}"
+```
+
+### Template Variables
+
+These variables are available in every message field (content, title, description, field values, footer, etc.):
+
+| Variable | Replaced with |
+|---|---|
+| `{user}` | Target's `username#discriminator` |
+| `{user.mention}` | `<@user_id>` mention |
+| `{user.id}` | Target user ID |
+| `{user.name}` | Target username (no discriminator) |
+| `{mod}` | Moderator's `username#discriminator` |
+| `{mod.mention}` | `<@mod_id>` mention |
+| `{reason}` | Reason string |
+| `{case_id}` | Case number |
+| `{duration}` | Duration label (e.g. `7d`, `Indefinite`) |
+| `{expires_at}` | Discord timestamp for expiry |
+| `{server}` | Server name |
+| `{channel}` | Channel mention (`<#channel_id>`) |
+| `{count}` | Numeric count (purge amount, lock count, etc.) |
+| `{role}` | Role name |
+| `{nickname}` | New nickname |
+| `{note_id}` | Note ID number |
+
+---
+
+### Action Success Messages
+
+| Key | When sent | Key variables |
+|---|---|---|
+| `ban_success` | Member banned | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
+| `tempban_success` | Member temp banned | `{user}`, `{mod}`, `{reason}`, `{duration}`, `{expires_at}`, `{case_id}` |
+| `softban_success` | Member softbanned | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
+| `unban_success` | Member unbanned | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
+| `kick_success` | Member kicked | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
+| `mute_success` | Member muted | `{user}`, `{mod}`, `{reason}`, `{duration}`, `{case_id}` |
+| `unmute_success` | Member unmuted | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
+| `warn_success` | Member warned | `{user}`, `{mod}`, `{reason}`, `{case_id}` |
+| `purge_success` | Messages purged | `{count}` |
+| `cleanup_success` | User messages cleaned | `{user}`, `{count}`, `{mod}` |
+| `slowmode_success` | Slowmode set | `{count}`, `{channel}`, `{mod}` |
+| `slowmode_off` | Slowmode removed | `{channel}`, `{mod}` |
+| `lock_success` | Channel locked (mod reply) | `{channel}`, `{reason}`, `{mod}` |
+| `lock_channel_notice` | Lock notice in the channel | `{channel}`, `{reason}`, `{mod}` |
+| `unlock_success` | Channel unlocked (mod reply) | `{channel}`, `{reason}`, `{mod}` |
+| `unlock_channel_notice` | Unlock notice in the channel | `{channel}`, `{mod}` |
+| `hide_success` | Channel hidden from @everyone | `{channel}`, `{reason}`, `{mod}` |
+| `unhide_success` | Channel made visible | `{channel}`, `{mod}` |
+| `nick_success` | Nickname set | `{user}`, `{nickname}`, `{mod}`, `{case_id}` |
+| `resetnick_success` | Nickname reset | `{user}`, `{mod}` |
+| `locknick_success` | Nickname locked | `{user}`, `{nickname}`, `{mod}` |
+| `unlocknick_success` | Nickname lock removed | `{user}`, `{mod}` |
+| `addrole_success` | Role added | `{user}`, `{role}`, `{reason}`, `{mod}` |
+| `removerole_success` | Role removed | `{user}`, `{role}`, `{reason}`, `{mod}` |
+| `temprole_success` | Temp role given | `{user}`, `{role}`, `{duration}`, `{expires_at}`, `{mod}`, `{reason}` |
+| `roleban_success` | Role ban applied | `{user}`, `{role}`, `{reason}`, `{case_id}`, `{mod}` |
+| `unroleban_success` | Role ban lifted | `{user}`, `{role}`, `{mod}` |
+| `watch_success` | User added to watchlist | `{user}`, `{reason}`, `{mod}` |
+| `unwatch_success` | User removed from watchlist | `{user}`, `{mod}` |
+| `note_success` | Note added | `{user}`, `{note_id}`, `{mod}` |
+| `deletenote_success` | Note deleted | `{user}`, `{note_id}`, `{mod}` |
+| `raidmode_on_success` | Raid mode activated | `{mod}`, `{count}` |
+| `raidmode_off_success` | Raid mode deactivated | `{mod}` |
+| `massrole_success` | Mass role given | `{role}`, `{count}`, `{mod}`, `{reason}` |
+| `massremoverole_success` | Mass role removed | `{role}`, `{count}`, `{mod}`, `{reason}` |
+| `masstemprole_success` | Mass temp role given | `{role}`, `{count}`, `{duration}`, `{mod}`, `{reason}` |
+
+**Informational / empty-state messages** — shown when a list command has nothing to display, or a status command reports an inactive state:
+
+| Key | When shown | Key variables |
+|---|---|---|
+| `raidmode_inactive` | `!raidmode status` and raid mode is off | — |
+| `banlist_empty` | `!banlist` has no bans | — |
+| `mutelist_empty` | `!mutelist` has no muted members | — |
+| `temproles_empty` | `!temproles` has no active entries | — |
+| `watchlist_empty` | `!watchlist` is empty | — |
+| `watchlist_no_entry` | Target not on watchlist | `{user}` |
+| `rolebanned_empty` | `!rolebanned` has no entries server-wide | — |
+| `rolebanned_user_empty` | `!rolebanned @user` has no entries | `{user}` |
+| `no_notes` | `!viewnotes @user` returns no notes | `{user}` |
+| `seen_no_data` | `!seen @user` has no tracking data | `{user}` |
+| `modnick_not_enabled` | `!modnick` is run but plugin disabled | — |
+| `modnick_clean` | `!modnick @user` finds no violations | `{user}` |
+
+---
+
+### DM Messages
+
+Sent privately to the user when a mod action is taken (only if `dm_on_action: true`).
+
+| Key | When sent |
+|---|---|
+| `ban_dm` | User is banned |
+| `tempban_dm` | User is temp banned |
+| `softban_dm` | User is softbanned |
+| `kick_dm` | User is kicked |
+| `mute_dm` | User is muted |
+| `unmute_dm` | User is unmuted |
+| `warn_dm` | User is warned |
+| `tempmute_dm` | User is temp muted |
+
+All DM messages support the same template variables as action success messages plus `{server}`.
+
+---
+
+### Error Messages
+
+Every error message is customizable. All support plain string or embed format.
+
+| Key | When shown |
+|---|---|
+| **Generic** | |
+| `err_no_permission` | Command level check fails |
+| `err_user_not_found` | Cannot resolve the target user |
+| `err_not_in_server` | Target is not a member of the server |
+| `err_invalid_id` | Provided ID is not a valid snowflake |
+| `err_invalid_duration` | Duration string cannot be parsed |
+| `err_provide_role` | No role argument given |
+| `err_hierarchy` | Target has equal or higher level than executor |
+| **Ban** | |
+| `err_cannot_ban_self` | Mod tries to ban themselves |
+| `err_cannot_ban_bot` | Mod tries to ban the bot |
+| `err_cannot_softban_self` | Mod tries to softban themselves |
+| `err_bot_cannot_ban` | Bot lacks permission to ban the target |
+| `err_not_banned` | Unban target is not currently banned |
+| **Kick** | |
+| `err_bot_cannot_kick` | Bot lacks permission to kick |
+| `err_cannot_kick_self` | Mod tries to kick themselves |
+| **Mute** | |
+| `err_cannot_mute_self` | Mod tries to mute themselves |
+| `err_bot_cannot_mute` | Bot lacks permission to mute |
+| **Warn** | |
+| `err_cannot_warn_self` | Mod tries to warn themselves |
+| `err_cannot_warn_bot` | Mod tries to warn a bot |
+| **Purge / Cleanup** | |
+| `err_purge_invalid` | Amount is out of range |
+| `err_cleanup_invalid` | Amount is out of range |
+| `err_cleanup_no_messages` | No recent messages found in the channel |
+| **Slowmode** | |
+| `err_slowmode_usage` | No arguments provided to slowmode command |
+| `err_slowmode_invalid` | Duration string cannot be parsed for slowmode |
+| **Nick** | |
+| `err_nick_cannot_manage` | Bot cannot manage target's nickname |
+| `err_nick_required` | No nickname text provided |
+| `err_nick_no_lock` | `unlocknick` target has no lock — vars: `{user}` |
+| **Role** | |
+| `err_role_not_found` | Role cannot be resolved |
+| `err_role_managed` | Role is bot/integration-managed |
+| `err_role_above_bot` | Role is above the bot's highest role |
+| `err_role_already_has` | Target already has the role — vars: `{user}`, `{role}` |
+| `err_role_does_not_have` | Target does not have the role — vars: `{user}`, `{role}` |
+| `err_temprole_usage` | Wrong temprole arguments |
+| `err_unroleban_not_found` | No matching role ban — vars: `{user}`, `{role}` |
+| **Mass Role** | |
+| `err_massrole_not_found` | Role cannot be resolved for mass role command |
+| `err_massrole_no_targets` | No valid targets provided |
+| **Watch** | |
+| `err_watch_already` | User is already on the watchlist — vars: `{user}` |
+| `err_watch_not_found` | User is not on the watchlist — vars: `{user}` |
+| **Notes** | |
+| `err_note_required` | No note text provided |
+| `err_note_invalid_id` | Note ID is not a valid number |
+| `err_note_not_found` | Note ID not found — vars: `{note_id}` |
+| **Raidmode** | |
+| `err_raidmode_usage` | Invalid subcommand |
+| `err_raidmode_already_on` | Raid mode is already active |
+| `err_raidmode_already_off` | Raid mode is not active |
+
+---
+
+### Reaction Roles Messages
+
+These live under `plugins.reaction_roles.messages`.
+
+| Key | When shown | Key variables |
+|---|---|---|
+| `rr_role_given` | User receives a role | `{trigger}` |
+| `rr_role_removed` | User's role is removed | `{trigger}` |
+| `rr_max_reached` | User hits panel role limit | `{count}` |
+| `rr_missing_required` | User missing required role | `{trigger}` |
+| `rr_assign_dm` | DM on role assign | `{trigger}`, `{server}` |
+| `rr_remove_dm` | DM on role remove | `{trigger}`, `{server}` |
+| `rr_created` | Panel created | `{trigger}` |
+| `rr_already_exists` | Panel name conflicts | `{trigger}` |
+| `rr_entry_added` | Role added to panel | `{reason}` |
+| `rr_entry_removed` | Role removed from panel | `{reason}` |
+| `rr_entry_not_found` | Role not found in panel | `{reason}` |
+| `rr_max_entries_reached` | Panel is full | `{trigger}`, `{count}` |
+| `rr_no_entries` | Panel has no entries yet | `{trigger}` |
+| `rr_posted` | Panel posted to channel | `{trigger}`, `{channel}` |
+| `rr_edited` | Panel updated | `{trigger}` |
+
+> **Tip:** See [`data/default-config.yaml`](data/default-config.yaml) for a complete annotated copy of every configurable key with its default value. Copy-paste sections directly into your guild's YAML config.
 
 ---
 

@@ -25,19 +25,23 @@ const warnCmd: Command = {
   description: "Warn a member.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "warn"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot warn yourself.");
-    if (target.user.bot) return void message.reply("❌ You cannot warn a bot.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_warn_self, {}, "❌ You cannot warn yourself."));
+    if (target.user.bot) return void message.reply(buildPayload(msgs.err_cannot_warn_bot, {}, "❌ You cannot warn a bot."));
 
     if (target.member) {
       const executor = await getExecutorMember(message);
       if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-        return void message.reply("❌ You cannot warn someone with an equal or higher role.");
+        return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot warn someone with an equal or higher role."));
       }
     }
 
@@ -52,9 +56,6 @@ const warnCmd: Command = {
       modTag: message.author.tag,
       reason,
     });
-
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
 
     const vars = {
       user: target.user.tag,
@@ -103,8 +104,10 @@ export const forcewarnCmd: Command = {
   description: "Warn a user by ID (works even if not in server).",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "forcewarn"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
     await warnCmd.execute(message, args, client);
   },

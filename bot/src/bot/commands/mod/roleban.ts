@@ -3,6 +3,7 @@ import type { Command } from "../types";
 import { resolveTarget, getArgs } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
 import { getCachedConfig } from "../../store/guildConfig";
+import { buildPayload } from "../../lib/msgTemplate";
 import { dbGet, dbSet } from "../../store/db";
 import { addCase } from "../../lib/cases";
 import { sendModLog } from "../../lib/modlog";
@@ -58,21 +59,25 @@ export const rolebanCmd: Command = {
   description: "Remove a role from a member and prevent them from being re-assigned it.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "roleban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
     const remaining = getArgs(message, args);
-    if (!remaining[0]) return void message.reply("❌ Please provide a role.");
+    if (!remaining[0]) return void message.reply(buildPayload(msgs.err_provide_role, {}, "❌ Please provide a role."));
 
     const resolved = resolveRoleFromArgs(message.guild, remaining);
-    if (!resolved) return void message.reply("❌ Could not find that role.");
+    if (!resolved) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role."));
     const { role, consumed } = resolved;
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
 
     const reason = remaining.slice(consumed).join(" ") || "No reason provided";
 
@@ -115,8 +120,18 @@ export const rolebanCmd: Command = {
       caseId: String(caseRecord.id),
     });
 
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      role: role.name,
+      reason,
+      case_id: caseRecord.id,
+      mod: message.author.tag,
+    };
+
     await message.reply(
-      `🚫 **${target.user.tag}** has been role-banned from **${role.name}**. Case: #${caseRecord.id}`
+      buildPayload(msgs.roleban_success, vars, `🚫 **${target.user.tag}** has been role-banned from **${role.name}**. Case: #${caseRecord.id}`)
     );
   },
 };
@@ -129,18 +144,22 @@ export const unrolebanCmd: Command = {
   description: "Remove a role ban from a member.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "unroleban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
 
     const remaining = getArgs(message, args);
-    if (!remaining[0]) return void message.reply("❌ Please provide a role.");
+    if (!remaining[0]) return void message.reply(buildPayload(msgs.err_provide_role, {}, "❌ Please provide a role."));
 
     const resolved = resolveRoleFromArgs(message.guild, remaining);
-    if (!resolved) return void message.reply("❌ Could not find that role.");
+    if (!resolved) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role."));
     const { role } = resolved;
 
     const rolebans = await loadRolebans(message.guild.id);
@@ -148,14 +167,24 @@ export const unrolebanCmd: Command = {
     const idx = userBans.findIndex((b) => b.roleId === role.id);
 
     if (idx === -1) {
-      return void message.reply(`❌ **${target.user.tag}** is not role-banned from **${role.name}**.`);
+      return void message.reply(
+        buildPayload(msgs.err_unroleban_not_found, { user: target.user.tag, role: role.name }, `❌ **${target.user.tag}** is not role-banned from **${role.name}**.`)
+      );
     }
 
     userBans.splice(idx, 1);
     rolebans[target.user.id] = userBans;
     await saveRolebans(message.guild.id, rolebans);
 
-    await message.reply(`✅ Role ban lifted — **${target.user.tag}** can now receive **${role.name}** again.`);
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      role: role.name,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.unroleban_success, vars, `✅ Role ban lifted — **${target.user.tag}** can now receive **${role.name}** again.`));
   },
 };
 
@@ -167,18 +196,22 @@ export const rolebannedCmd: Command = {
   description: "List role bans for a user, or all role bans in the server.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "rolebanned"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const rolebans = await loadRolebans(message.guild.id);
 
     if (args.length > 0) {
       const target = await resolveTarget(message, args);
-      if (!target) return void message.reply("❌ Could not find that user.");
+      if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+      const modCfg = getCachedConfig(message.guild.id);
+      const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
       const userBans = rolebans[target.user.id] ?? [];
       if (userBans.length === 0) {
-        return void message.reply(`✅ **${target.user.tag}** has no role bans.`);
+        return void message.reply(buildPayload(modMsgs.rolebanned_user_empty, { user: target.user.tag, "user.id": target.user.id }, `✅ **${target.user.tag}** has no role bans.`));
       }
       const lines = userBans.map(
         (b) => `• **${b.roleName}** (${b.roleId}) — ${b.reason} · <t:${Math.floor(b.bannedAt / 1000)}:R>`
@@ -198,7 +231,9 @@ export const rolebannedCmd: Command = {
           all.push(`• **${b.userTag}** (${userId}) — **${b.roleName}** — ${b.reason}`);
         }
       }
-      if (all.length === 0) return void message.reply("✅ No role bans in this server.");
+      const modCfgAll = getCachedConfig(message.guild.id);
+      const modMsgsAll = (modCfgAll.plugins.moderation as any)?.messages ?? {};
+      if (all.length === 0) return void message.reply(buildPayload(modMsgsAll.rolebanned_empty, {}, "✅ No role bans in this server."));
       await message.channel.send({
         embeds: [
           new EmbedBuilder()

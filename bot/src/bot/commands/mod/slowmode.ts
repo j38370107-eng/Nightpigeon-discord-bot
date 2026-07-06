@@ -59,14 +59,22 @@ const slowmodeCmd: Command = {
   description: "Set or remove slowmode in a channel.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "slowmode"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     if (!args[0]) {
       return void message.reply(
-        "❌ Usage: `slowmode <time|+time|-time|off> [#channel]`\n" +
-        "Examples: `slowmode 5m`, `slowmode 30s`, `slowmode 2h`, `slowmode +5`, `slowmode -10`, `slowmode off`"
+        buildPayload(
+          msgs.err_slowmode_usage,
+          {},
+          "❌ Usage: `slowmode <time|+time|-time|off> [#channel]`\n" +
+          "Examples: `slowmode 5m`, `slowmode 30s`, `slowmode 2h`, `slowmode +5`, `slowmode -10`, `slowmode off`"
+        )
       );
     }
 
@@ -79,7 +87,11 @@ const slowmodeCmd: Command = {
 
     if (!parsed) {
       return void message.reply(
-        "❌ Invalid duration. Use a number with `s`, `m`, or `h` (e.g. `5m`), a relative change like `+5` or `-5`, or `off`."
+        buildPayload(
+          msgs.err_slowmode_invalid,
+          {},
+          "❌ Invalid duration. Use a number with `s`, `m`, or `h` (e.g. `5m`), a relative change like `+5` or `-5`, or `off`."
+        )
       );
     }
 
@@ -97,12 +109,11 @@ const slowmodeCmd: Command = {
     await targetChannel.setRateLimitPerUser(finalSeconds, `Set by ${message.author.tag}`);
 
     const isOff = finalSeconds === 0;
-    const cfg   = getCachedConfig(message.guild.id);
-    const msgs  = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars  = {
       count: finalSeconds,
       channel: `<#${targetChannel.id}>`,
       "channel.mention": `<#${targetChannel.id}>`,
+      mod: message.author.tag,
     };
 
     const key      = isOff ? "slowmode_off" : "slowmode_success";

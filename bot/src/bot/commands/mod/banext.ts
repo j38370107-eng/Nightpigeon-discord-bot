@@ -25,25 +25,29 @@ export const tempbanCmd: Command = {
   description: "Temporarily ban a member. Duration is required (e.g. 7d).",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "tempban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot ban yourself.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_ban_self, {}, "❌ You cannot ban yourself."));
 
     if (target.member) {
-      if (!target.member.bannable) return void message.reply("❌ I cannot ban that member.");
+      if (!target.member.bannable) return void message.reply(buildPayload(msgs.err_bot_cannot_ban, {}, "❌ I cannot ban that member."));
       const executor = await getExecutorMember(message);
       if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-        return void message.reply("❌ You cannot ban someone with an equal or higher level.");
+        return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot ban someone with an equal or higher level."));
       }
     }
 
     const remaining = getArgs(message, args);
     const durationMs = remaining[0] ? parseDuration(remaining[0]!) : null;
-    if (!durationMs) return void message.reply("❌ Please provide a valid duration (e.g. `1d`, `12h`).");
+    if (!durationMs) return void message.reply(buildPayload(msgs.err_invalid_duration, {}, "❌ Please provide a valid duration (e.g. `1d`, `12h`)."));
 
     const durationLabel = formatDuration(durationMs);
     remaining.shift();
@@ -61,14 +65,13 @@ export const tempbanCmd: Command = {
       expiresAt,
     });
 
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
-
     const vars = {
       user: target.user.tag,
       "user.mention": `<@${target.user.id}>`,
       "user.id": target.user.id,
+      "user.name": target.user.username,
       mod: message.author.tag,
+      "mod.mention": `<@${message.author.id}>`,
       reason,
       duration: durationLabel,
       case_id: caseRecord.id,
@@ -126,19 +129,23 @@ export const softbanCmd: Command = {
   description: "Softban a member (ban + immediate unban to delete recent messages).",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "softban"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot softban yourself.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_softban_self, {}, "❌ You cannot softban yourself."));
 
     if (target.member) {
-      if (!target.member.bannable) return void message.reply("❌ I cannot ban that member.");
+      if (!target.member.bannable) return void message.reply(buildPayload(msgs.err_bot_cannot_ban, {}, "❌ I cannot ban that member."));
       const executor = await getExecutorMember(message);
       if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-        return void message.reply("❌ You cannot softban someone with an equal or higher level.");
+        return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot softban someone with an equal or higher level."));
       }
     }
 
@@ -153,13 +160,13 @@ export const softbanCmd: Command = {
       reason,
     });
 
-    const cfg = getCachedConfig(message.guild.id);
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars = {
       user: target.user.tag,
       "user.mention": `<@${target.user.id}>`,
       "user.id": target.user.id,
+      "user.name": target.user.username,
       mod: message.author.tag,
+      "mod.mention": `<@${message.author.id}>`,
       reason,
       case_id: caseRecord.id,
       server: message.guild.name,
@@ -207,12 +214,14 @@ export const baninfoCmd: Command = {
   description: "Show ban information for a user.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "baninfo"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const rawId = (args[0] ?? "").replace(/[<@!>]/g, "");
-    if (!/^\d{15,20}$/.test(rawId)) return void message.reply("❌ Please provide a valid user ID.");
+    if (!/^\d{15,20}$/.test(rawId)) return void message.reply(buildPayload(msgs.err_invalid_id, {}, "❌ Please provide a valid user ID."));
 
     try {
       const ban = await message.guild.bans.fetch(rawId);
@@ -230,7 +239,7 @@ export const baninfoCmd: Command = {
         ],
       });
     } catch {
-      return void message.reply("❌ That user is not banned in this server.");
+      return void message.reply(buildPayload(msgs.err_not_banned, {}, "❌ That user is not banned in this server."));
     }
   },
 };
@@ -243,12 +252,16 @@ export const banlistCmd: Command = {
   description: "List all banned users in this server.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "banlist"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const bans = await message.guild.bans.fetch();
-    if (bans.size === 0) return void message.reply("✅ No bans in this server.");
+    const modCfg = getCachedConfig(message.guild.id);
+    const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+    if (bans.size === 0) return void message.reply(buildPayload(modMsgs.banlist_empty, {}, "✅ No bans in this server."));
 
     const page = Math.max(1, parseInt(args[0] ?? "1", 10) || 1);
     const perPage = 20;

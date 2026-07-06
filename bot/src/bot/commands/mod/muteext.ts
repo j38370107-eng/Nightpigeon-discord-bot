@@ -1,4 +1,4 @@
-import { Client, EmbedBuilder, Message, GuildMember } from "discord.js";
+import { Client, EmbedBuilder, Message } from "discord.js";
 import type { Command } from "../types";
 import { resolveTarget, getArgs } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
@@ -29,31 +29,34 @@ export const tempmuteCmd: Command = {
   description: "Temporarily mute a member. Duration is required (e.g. 1h).",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "tempmute"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot mute yourself.");
-    if (!target.member.moderatable) return void message.reply("❌ I cannot mute that member.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_mute_self, {}, "❌ You cannot mute yourself."));
+    if (!target.member.moderatable) return void message.reply(buildPayload(msgs.err_bot_cannot_mute, {}, "❌ I cannot mute that member."));
 
     const executor = await getExecutorMember(message);
     if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-      return void message.reply("❌ You cannot mute someone with an equal or higher role.");
+      return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot mute someone with an equal or higher role."));
     }
 
     const remaining = getArgs(message, args);
     const durationMs = remaining[0] ? parseDuration(remaining[0]!) : null;
-    if (!durationMs) return void message.reply("❌ Please provide a valid duration (e.g. `30m`, `2h`).");
+    if (!durationMs) return void message.reply(buildPayload(msgs.err_invalid_duration, {}, "❌ Please provide a valid duration (e.g. `30m`, `2h`)."));
 
     const durationLabel = formatDuration(Math.min(durationMs, MAX_TIMEOUT_MS));
     remaining.shift();
     const reason = resolveReason(message.guild.id, remaining.join(" "));
     const expiresAt = Date.now() + durationMs;
 
-    const cfg = getCachedConfig(message.guild.id);
     const muteCfg = getMuteConfig(message.guild.id);
 
     if (muteCfg.mode === "role" && muteCfg.muteRoleId) {
@@ -87,13 +90,13 @@ export const tempmuteCmd: Command = {
       expiresAt,
     });
 
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
-
     const vars = {
       user: target.user.tag,
       "user.mention": `<@${target.user.id}>`,
       "user.id": target.user.id,
+      "user.name": target.user.username,
       mod: message.author.tag,
+      "mod.mention": `<@${message.author.id}>`,
       reason,
       duration: durationLabel,
       case_id: caseRecord.id,
@@ -121,7 +124,7 @@ export const tempmuteCmd: Command = {
 
     await message.channel.send(
       buildPayload(
-        msgs.mute_success,
+        msgs.tempmute_success ?? msgs.mute_success,
         vars,
         `🔇 **${target.user.tag}** has been muted for **${durationLabel}**. Case: #${caseRecord.id}`
       )
@@ -137,15 +140,16 @@ export const muteinfoCmd: Command = {
   description: "Show mute status for a member.",
   async execute(message: Message, args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "muteinfo"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
-    const cfg = getCachedConfig(message.guild.id);
     const muteRole = (cfg.plugins.moderation as any)?.mute_role as string | null | undefined;
 
     let isMuted = false;
@@ -186,11 +190,12 @@ export const mutelistCmd: Command = {
   description: "List all currently muted members.",
   async execute(message: Message, _args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "mutelist"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
-    const cfg = getCachedConfig(message.guild.id);
     const muteRole = (cfg.plugins.moderation as any)?.mute_role as string | null | undefined;
 
     await message.guild.members.fetch();
@@ -218,7 +223,9 @@ export const mutelistCmd: Command = {
       });
     }
 
-    if (muted.length === 0) return void message.reply("✅ No muted members.");
+    const modCfg = getCachedConfig(message.guild.id);
+    const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+    if (muted.length === 0) return void message.reply(buildPayload(modMsgs.mutelist_empty, {}, "✅ No muted members."));
 
     const lines = muted.map(
       (m) => `• **${m.tag}** (${m.id})${m.until ? ` — expires ${m.until}` : ""}`

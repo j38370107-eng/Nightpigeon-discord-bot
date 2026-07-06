@@ -29,19 +29,23 @@ const muteCmd: Command = {
   description: "Mute a member. Uses mute_role if configured, otherwise Discord timeout.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "mute"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
-    if (target.user.id === message.author.id) return void message.reply("❌ You cannot mute yourself.");
-    if (!target.member.moderatable) return void message.reply("❌ I cannot mute that member — they may have a higher role than me.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
+    if (target.user.id === message.author.id) return void message.reply(buildPayload(msgs.err_cannot_mute_self, {}, "❌ You cannot mute yourself."));
+    if (!target.member.moderatable) return void message.reply(buildPayload(msgs.err_bot_cannot_mute, {}, "❌ I cannot mute that member — they may have a higher role than me."));
 
     const executor = await getExecutorMember(message);
     if (executor && isHierarchyBlocked(executor, target.member, getMemberLevel(executor), getMemberLevel(target.member))) {
-      return void message.reply("❌ You cannot mute someone with an equal or higher role.");
+      return void message.reply(buildPayload(msgs.err_hierarchy, {}, "❌ You cannot mute someone with an equal or higher role."));
     }
 
     const remaining = getArgs(message, args);
@@ -61,7 +65,6 @@ const muteCmd: Command = {
     const reason = resolveReason(message.guild.id, rawReason);
     const expiresAt = durationMs ? Date.now() + durationMs : undefined;
 
-    const cfg = getCachedConfig(message.guild.id);
     const muteCfg = getMuteConfig(message.guild.id);
 
     if (muteCfg.mode === "role" && muteCfg.muteRoleId) {
@@ -95,7 +98,6 @@ const muteCmd: Command = {
       expiresAt,
     });
 
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars = {
       user: target.user.tag,
       "user.mention": `<@${target.user.id}>`,
@@ -147,18 +149,21 @@ export const unmuteCmd: Command = {
   description: "Unmute a member.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "unmute"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
     const rawReason = getArgs(message, args).join(" ");
     const reason = rawReason || "No reason provided";
 
-    const cfg = getCachedConfig(message.guild.id);
     const muteCfg = getMuteConfig(message.guild.id);
 
     if (muteCfg.mode === "role" && muteCfg.muteRoleId) {
@@ -181,12 +186,12 @@ export const unmuteCmd: Command = {
       reason,
     });
 
-    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     const vars = {
       user: target.user.tag,
       "user.mention": `<@${target.user.id}>`,
       "user.id": target.user.id,
       mod: message.author.tag,
+      "mod.mention": `<@${message.author.id}>`,
       reason,
       case_id: caseRecord.id,
     };
@@ -221,8 +226,10 @@ export const forceMuteCmd: Command = {
   usage: "<user_id> [duration] [reason]",
   description: "Mute a user by ID.",
   async execute(message: Message, args: string[], client: Client) {
+    const cfg = getCachedConfig(message.guild?.id ?? "");
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "forcemute"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
     await muteCmd.execute(message, args, client);
   },
@@ -234,8 +241,10 @@ export const forceUnmuteCmd: Command = {
   usage: "<user_id> [reason]",
   description: "Unmute a user by ID.",
   async execute(message: Message, args: string[], client: Client) {
+    const cfg = getCachedConfig(message.guild?.id ?? "");
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "forceunmute"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
     await unmuteCmd.execute(message, args, client);
   },

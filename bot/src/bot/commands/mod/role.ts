@@ -3,6 +3,7 @@ import type { Command } from "../types";
 import { resolveTarget, getArgs } from "../../lib/resolveUser";
 import { checkYamlLevelAsync } from "../../lib/yamlLevels";
 import { getCachedConfig } from "../../store/guildConfig";
+import { buildPayload } from "../../lib/msgTemplate";
 import { dbGet, dbSet } from "../../store/db";
 import { parseDuration, formatDuration } from "../../lib/parseDuration";
 import { sendModLog } from "../../lib/modlog";
@@ -73,26 +74,32 @@ export const addroleCmd: Command = {
   description: "Add a role to a member.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "addrole"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
     const remaining = getArgs(message, args);
-    if (!remaining[0]) return void message.reply("❌ Please provide a role.");
+    if (!remaining[0]) return void message.reply(buildPayload(msgs.err_provide_role, {}, "❌ Please provide a role."));
 
     const resolved = resolveRoleFromArgs(message.guild, remaining);
-    if (!resolved) return void message.reply("❌ Could not find that role.");
+    if (!resolved) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role."));
     const { role, consumed } = resolved;
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
     if (role.position >= message.guild.members.me!.roles.highest.position) {
-      return void message.reply("❌ That role is above my highest role.");
+      return void message.reply(buildPayload(msgs.err_role_above_bot, {}, "❌ That role is above my highest role."));
     }
     if (target.member.roles.cache.has(role.id)) {
-      return void message.reply(`❌ **${target.user.tag}** already has the **${role.name}** role.`);
+      return void message.reply(
+        buildPayload(msgs.err_role_already_has, { user: target.user.tag, role: role.name }, `❌ **${target.user.tag}** already has the **${role.name}** role.`)
+      );
     }
 
     const reason = remaining.slice(consumed).join(" ") || "No reason provided";
@@ -106,7 +113,16 @@ export const addroleCmd: Command = {
       color: 0x2ecc71,
     });
 
-    await message.reply(`✅ Added **${role.name}** to **${target.user.tag}**.`);
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      role: role.name,
+      reason,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.addrole_success, vars, `✅ Added **${role.name}** to **${target.user.tag}**.`));
   },
 };
 
@@ -118,26 +134,32 @@ export const removeroleCmd: Command = {
   description: "Remove a role from a member.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "removerole"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
     const remaining = getArgs(message, args);
-    if (!remaining[0]) return void message.reply("❌ Please provide a role.");
+    if (!remaining[0]) return void message.reply(buildPayload(msgs.err_provide_role, {}, "❌ Please provide a role."));
 
     const resolved = resolveRoleFromArgs(message.guild, remaining);
-    if (!resolved) return void message.reply("❌ Could not find that role.");
+    if (!resolved) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role."));
     const { role, consumed } = resolved;
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
     if (role.position >= message.guild.members.me!.roles.highest.position) {
-      return void message.reply("❌ That role is above my highest role.");
+      return void message.reply(buildPayload(msgs.err_role_above_bot, {}, "❌ That role is above my highest role."));
     }
     if (!target.member.roles.cache.has(role.id)) {
-      return void message.reply(`❌ **${target.user.tag}** does not have the **${role.name}** role.`);
+      return void message.reply(
+        buildPayload(msgs.err_role_does_not_have, { user: target.user.tag, role: role.name }, `❌ **${target.user.tag}** does not have the **${role.name}** role.`)
+      );
     }
 
     const reason = remaining.slice(consumed).join(" ") || "No reason provided";
@@ -151,7 +173,16 @@ export const removeroleCmd: Command = {
       color: 0xe67e22,
     });
 
-    await message.reply(`✅ Removed **${role.name}** from **${target.user.tag}**.`);
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      role: role.name,
+      reason,
+      mod: message.author.tag,
+    };
+
+    await message.reply(buildPayload(msgs.removerole_success, vars, `✅ Removed **${role.name}** from **${target.user.tag}**.`));
   },
 };
 
@@ -163,28 +194,32 @@ export const temproleCmd: Command = {
   description: "Give a member a role for a limited time.",
   async execute(message: Message, args: string[], client: Client) {
     if (!message.guild) return;
+
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
+
     if (!(await checkYamlLevelAsync(message, "temprole"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const target = await resolveTarget(message, args);
-    if (!target) return void message.reply("❌ Could not find that user.");
-    if (!target.member) return void message.reply("❌ That user is not in this server.");
+    if (!target) return void message.reply(buildPayload(msgs.err_user_not_found, {}, "❌ Could not find that user."));
+    if (!target.member) return void message.reply(buildPayload(msgs.err_not_in_server, {}, "❌ That user is not in this server."));
 
     const remaining = getArgs(message, args);
-    if (remaining.length < 2) return void message.reply("❌ Usage: `!temprole @user <role> <duration> [reason]`");
+    if (remaining.length < 2) return void message.reply(buildPayload(msgs.err_temprole_usage, {}, "❌ Usage: `!temprole @user <role> <duration> [reason]`"));
 
     // Role name may be multi-word; reserve at least 1 token for the duration.
     const resolved = resolveRoleFromArgs(message.guild, remaining, remaining.length - 1);
-    if (!resolved) return void message.reply("❌ Could not find that role.");
+    if (!resolved) return void message.reply(buildPayload(msgs.err_role_not_found, {}, "❌ Could not find that role."));
     const { role, consumed } = resolved;
-    if (role.managed) return void message.reply("❌ That role is managed by an integration.");
+    if (role.managed) return void message.reply(buildPayload(msgs.err_role_managed, {}, "❌ That role is managed by an integration."));
     if (role.position >= message.guild.members.me!.roles.highest.position) {
-      return void message.reply("❌ That role is above my highest role.");
+      return void message.reply(buildPayload(msgs.err_role_above_bot, {}, "❌ That role is above my highest role."));
     }
 
     const durationMs = parseDuration(remaining[consumed] ?? "");
-    if (!durationMs) return void message.reply("❌ Please provide a valid duration (e.g. `1h`, `7d`).");
+    if (!durationMs) return void message.reply(buildPayload(msgs.err_invalid_duration, {}, "❌ Please provide a valid duration (e.g. `1h`, `7d`)."));
 
     const durationLabel = formatDuration(durationMs);
     const reason = remaining.slice(consumed + 1).join(" ") || "No reason provided";
@@ -222,9 +257,18 @@ export const temproleCmd: Command = {
       } catch { /* ok */ }
     }, durationMs);
 
-    await message.reply(
-      `⏱️ **${target.user.tag}** has been given **${role.name}** for **${durationLabel}**.\nExpires: <t:${Math.floor(expiresAt / 1000)}:F>`
-    );
+    const vars = {
+      user: target.user.tag,
+      "user.mention": `<@${target.user.id}>`,
+      "user.id": target.user.id,
+      role: role.name,
+      duration: durationLabel,
+      expires_at: `<t:${Math.floor(expiresAt / 1000)}:F>`,
+      mod: message.author.tag,
+      reason,
+    };
+
+    await message.reply(buildPayload(msgs.temprole_success, vars, `⏱️ **${target.user.tag}** has been given **${role.name}** for **${durationLabel}**.\nExpires: <t:${Math.floor(expiresAt / 1000)}:F>`));
   },
 };
 
@@ -236,15 +280,19 @@ export const temprolesCmd: Command = {
   description: "List all active temporary roles in this server.",
   async execute(message: Message, _args: string[], _client: Client) {
     if (!message.guild) return;
+    const cfg = getCachedConfig(message.guild.id);
+    const msgs = (cfg.plugins.moderation as any)?.messages ?? {};
     if (!(await checkYamlLevelAsync(message, "temproles"))) {
-      return void message.reply("❌ You don't have permission to use this command.");
+      return void message.reply(buildPayload(msgs.err_no_permission, {}, "❌ You don't have permission to use this command."));
     }
 
     const entries = await loadTempRoles(message.guild.id);
     const now = Date.now();
     const active = entries.filter((e) => e.expiresAt > now);
 
-    if (active.length === 0) return void message.reply("✅ No active temp roles.");
+    const modCfg = getCachedConfig(message.guild.id);
+    const modMsgs = (modCfg.plugins.moderation as any)?.messages ?? {};
+    if (active.length === 0) return void message.reply(buildPayload(modMsgs.temproles_empty, {}, "✅ No active temp roles."));
 
     const lines = active.map(
       (e) =>
