@@ -64,13 +64,7 @@ router.get("/callback", async (req: any, res: any) => {
       // Regular users: only see guilds where they are server owner
       // Staff access is granted per-guild by the server owner via the Access panel
       const guilds = await getMyGuilds(tokens.access_token);
-      const OWNER_PERM_FLAG = BigInt(0x8); // ADMINISTRATOR
-      const IS_OWNER_FLAG = 0x20000000; // bit 29 — owner bit in guild list response
-      req.session.guilds = guilds.filter((g) => {
-        // Discord sets bit 29 (0x20000000) when the user is the server owner
-        const perms = BigInt(g.permissions ?? "0");
-        return Boolean(Number(perms) & IS_OWNER_FLAG);
-      });
+      req.session.guilds = guilds.filter((g) => g.owner);
       req.session.staffAccess = user.id; // mark for guilds route to merge staff access
     }
 
@@ -121,8 +115,7 @@ router.post("/refresh-guilds", async (req: any, res: any) => {
     } else {
       // Owner-only guilds + staff access guilds
       const guilds = await getMyGuilds(accessToken);
-      const IS_OWNER_FLAG = 0x20000000;
-      req.session.guilds = guilds.filter((g) => Boolean(Number(BigInt(g.permissions ?? "0")) & IS_OWNER_FLAG));
+      req.session.guilds = guilds.filter((g) => g.owner);
       req.session.staffAccess = req.session.userId;
     }
     await new Promise<void>((resolve, reject) =>
