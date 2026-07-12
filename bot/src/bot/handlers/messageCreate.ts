@@ -1,7 +1,7 @@
 import { Client, Message } from "discord.js";
 import type { Command } from "../commands/types";
 import { getGuildConfig, getCachedConfig } from "../store/guildConfig";
-import { getRequiredLevel, getUserLevel, LEVEL_UNCONFIGURED } from "../lib/yamlLevels";
+import { getRequiredLevel, getUserLevel, LEVEL_UNCONFIGURED, OWNER_LEVEL } from "../lib/yamlLevels";
 import { runAutomod } from "../lib/runAutomod";
 import { logger } from "../../lib/logger";
 import { recordSeen } from "../commands/mod/cleanup";
@@ -276,7 +276,7 @@ export async function handleMessage(client: Client, message: Message): Promise<v
 
   if (cmd) {
     const required = cmd.public ? 0 : getRequiredLevel(guildId, cmd.name);
-    if (required >= LEVEL_UNCONFIGURED) {
+    if (required >= LEVEL_UNCONFIGURED && getUserLevel(message) < OWNER_LEVEL) {
       await message.reply(
         `⚙️ That command isn't enabled yet. Use \`${prefix}help\` to see what's available, or visit the dashboard to configure more commands: <${BOT_WEBSITE}>`
       ).catch(() => {});

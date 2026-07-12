@@ -1,7 +1,7 @@
 import { Client, Message, EmbedBuilder } from "discord.js";
 import type { Command } from "../types";
 import { getCachedConfig } from "../../store/guildConfig";
-import { getUserLevel, getRequiredLevel, LEVEL_UNCONFIGURED } from "../../lib/yamlLevels";
+import { getUserLevel, getRequiredLevel, LEVEL_UNCONFIGURED, OWNER_LEVEL, canUseCommand } from "../../lib/yamlLevels";
 
 const BOT_WEBSITE = "https://nightpigeon.xyz";
 
@@ -168,21 +168,23 @@ const helpCmd: Command = {
         .map(([alias]) => alias);
 
       const required = getRequiredLevel(message.guild.id, resolvedName);
-      const enabled  = required < LEVEL_UNCONFIGURED;
+      const configured = required < LEVEL_UNCONFIGURED;
+      const isOwnerUser = userLevel >= OWNER_LEVEL;
+      const accessible = canUseCommand(required, userLevel);
 
       const embed = new EmbedBuilder()
-        .setColor(enabled ? 0x5865f2 : 0x4a4a4a)
+        .setColor(accessible ? 0x5865f2 : 0x4a4a4a)
         .setTitle(`${prefix}${resolvedName}`)
         .setDescription(meta.description)
         .addFields(
           { name: "Usage",          value: `\`${prefix}${resolvedName} ${meta.usage}\``, inline: false },
           { name: "Aliases",        value: guildAliases.length ? guildAliases.map(a => `\`${prefix}${a}\``).join(", ") : "None", inline: true },
-          { name: "Required Level", value: enabled ? String(required) : "Not configured", inline: true },
+          { name: "Required Level", value: configured ? String(required) : (isOwnerUser ? "Not configured (owner override)" : "Not configured"), inline: true },
           { name: "Your Level",     value: String(userLevel), inline: true },
-          { name: "Status",         value: enabled ? (userLevel >= required ? "✅ You can use this" : "🔒 Insufficient level") : "⚙️ Not enabled — add to your config", inline: false }
+          { name: "Status",         value: accessible ? "✅ You can use this" : (configured ? "🔒 Insufficient level" : "⚙️ Not enabled — add to your config"), inline: false }
         );
 
-      if (!enabled) {
+      if (!configured && !isOwnerUser) {
         embed.setFooter({ text: `Configure at ${BOT_WEBSITE}` });
       }
 
@@ -192,7 +194,7 @@ const helpCmd: Command = {
     // !help (list)
     const enabledNames = Object.keys(COMMAND_META).filter((name) => {
       const required = getRequiredLevel(message.guild!.id, name);
-      return required < LEVEL_UNCONFIGURED && userLevel >= required;
+      return canUseCommand(required, userLevel);
     });
 
     const tags = Object.keys(cfg.tags ?? {}).filter((tagName) => {

@@ -67,13 +67,25 @@ export function getRequiredLevel(guildId: string, commandName: string): number {
 }
 
 /**
+ * Returns true if a user at `userLevel` can use a command that requires
+ * `required`. The owner (bot owner or server owner, level >= OWNER_LEVEL)
+ * always passes — including for commands that aren't configured at all
+ * (required === LEVEL_UNCONFIGURED) — per the documented "owner always has
+ * access regardless of config" behavior.
+ */
+export function canUseCommand(required: number, userLevel: number): boolean {
+  if (userLevel >= OWNER_LEVEL) return true;
+  return required < LEVEL_UNCONFIGURED && userLevel >= required;
+}
+
+/**
  * Returns true if the user's level meets the requirement for the given command.
  */
 export function checkYamlLevel(message: Message, commandName: string): boolean {
   if (!message.guild) return false;
   const userLevel = getUserLevel(message);
   const required = getRequiredLevel(message.guild.id, commandName);
-  return userLevel >= required;
+  return canUseCommand(required, userLevel);
 }
 
 /**
