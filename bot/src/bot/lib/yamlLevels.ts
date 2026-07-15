@@ -51,19 +51,18 @@ export function getUserLevel(message: Message): number {
   return getMemberLevel(message.member);
 }
 
-/** Sentinel value — command not configured for this guild. */
+/** Sentinel value — used only when a command is explicitly disabled. */
 export const LEVEL_UNCONFIGURED = 999_999_999_999;
 
 /**
  * Returns the required level for a command from YAML config.
- * Returns LEVEL_UNCONFIGURED if the command has not been explicitly set up
- * in levels.commands for this guild — such commands are treated as disabled
- * (hidden from help, blocked from execution) until an admin configures them.
+ * Defaults to 0 (everyone) when the command is not listed in levels.commands.
+ * Set a command to LEVEL_UNCONFIGURED in config to explicitly disable it.
  */
 export function getRequiredLevel(guildId: string, commandName: string): number {
   const cfg = getCachedConfig(guildId);
   const required = cfg.levels.commands[commandName];
-  return required ?? LEVEL_UNCONFIGURED;
+  return required ?? 0;
 }
 
 /**
